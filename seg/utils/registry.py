@@ -1,18 +1,19 @@
-# adapted from https://github.com/open-mmlab/mmcv
 import inspect
-from functools import partial
 
 
-class Registry(object):
-
+class Registry:
+    """
+    注册器，用于注册类和函数
+    """
     def __init__(self, name):
         self._name = name
         self._module_dict = dict()
 
-    def __repr__(self):
-        format_str = self.__class__.__name__ + '(name={}, items={})'.format(
-            self._name, list(self._module_dict.keys()))
-        return format_str
+    def __len__(self):
+        return len(self._module_dict)
+
+    def __contains__(self, key):
+        return self.get(key) is not None
 
     @property
     def name(self):
@@ -25,117 +26,83 @@ class Registry(object):
     def get(self, key):
         return self._module_dict.get(key, None)
 
-    def _register_module(self, module_class, force=False):
-        """Register a module.
-        Args:
-            module (:obj:`nn.Module`): Module to be registered.
-        """
-        if not inspect.isclass(module_class):
-            raise TypeError('module must be a class, but got {}'.format(
-                type(module_class)))
-        module_name = module_class.__name__
-        if not force and module_name in self._module_dict:
-            raise KeyError('{} is already registered in {}'.format(
-                module_name, self.name))
-        self._module_dict[module_name] = module_class
+    def register_module(self, name=None,
+                        force: bool=False,
+                        module=None):
 
-    def register_module(self, cls=None, force=False):
-        if cls is None:
-            return partial(self.register_module, force=force)
-        self._register_module(cls, force=force)
-        return cls
+        if module is not None:
+            self._register_module(module, module_name=name, force=force)
+            return module
+
+        if not (name is None or isinstance(name, str)):
+            raise TypeError(f'name must be a str, but got {type(name)}')
+
+        def _register(m):
+            self._register_module(m, module_name=name, force=force)
+            return m
+        return _register
+
+    def _register_module(self, module, module_name, force=False):
+
+        if inspect.isclass(module) or callable(module):
+            if module_name is None:
+                module_name = module.__name__
+            if not force and module_name in self._module_dict:
+                raise KeyError(f'{module_name} is already registered '
+                               f'in {self.name}')
+            self._module_dict[module_name] = module
+        else:
+            raise TypeError('module must be a class or function'
+                            f'but got {type(module)}')
 
 
-def build_from_cfg(cfg, src, default_args=None, mode='registry'):
-    if mode == 'registry':
-        return build_from_registry(cfg, src, default_args=default_args)
-    elif mode == 'module':
-        return build_from_module(cfg, src, default_args=default_args)
-    else:
-        raise ValueError('Mode {} is not supported currently'.format(mode))
-
-
-def build_from_registry(cfg, registry, default_args=None):
-    """Build a module from config dict.
-    Args:
-        cfg (dict): Config dict. It should at least contain the key "type".
-        registry (:obj:`Registry`): The registry to search the type from.
-        default_args (dict, optional): Default initialization arguments.
-    Returns:
-        obj: The constructed object.
+def build_from_cfg(cfg: dict,
+                   registry: Registry,
+                   update_args: dict = None):
     """
-    assert isinstance(cfg, dict) and 'type' in cfg
-    assert isinstance(default_args, dict) or default_args is None
-    args = cfg.copy()
-    obj_type = args.pop('type')
-    if isinstance(obj_type, str):
-        obj_cls = registry.get(obj_type)
-        if obj_cls is None:
-            raise KeyError('{} is not in the {} registry'.format(
-                obj_type, registry.name))
-    elif inspect.isclass(obj_type):
-        obj_cls = obj_type
-    else:
-        raise TypeError('type must be a str or valid type, but got {}'.format(
-            type(obj_type)))
-    if default_args is not None:
-        for name, value in default_args.items():
-            args.setdefault(name, value)
-    return obj_cls(**args)
-
-
-def build_from_module(cfg, module, default_args=None):
-    """Build a module from config dict.
-    Args:
-        cfg (dict): Config dict. It should at least contain the key "type".
-        module (:obj:`module`): The module to search the type from.
-        default_args (dict, optional): Default initialization arguments.
-    Returns:
-        obj: The constructed object.
+    通过配置文件创建一个类，或者执行一个函数
     """
-    assert isinstance(cfg, dict) and 'type' in cfg
-    assert isinstance(default_args, dict) or default_args is None
     args = cfg.copy()
-    obj_type = args.pop('type')
-    if isinstance(obj_type, str):
-        obj_cls = getattr(module, obj_type)
-        if obj_cls is None:
-            raise KeyError('{} is not in the {} module'.format(
-                obj_type, module))
-    elif inspect.isclass(obj_type):
-        obj_cls = obj_type
+    module_type = args.pop('type')
+    if isinstance(module_type, str):
+        module_obj = registry.get(module_type)
+        if module_obj is None:
+            raise KeyError(f'{module_type} is not in the {registry.name} registry')
+
+        if update_args is not None:
+            args.update(**update_args)
+        return module_obj(**args)
     else:
-        raise TypeError('type must be a str or valid type, but got {}'.format(
-            type(obj_type)))
-    if default_args is not None:
-        for name, value in default_args.items():
-            args.setdefault(name, value)
-    return obj_cls(**args)
+        raise TypeError(
+            f'type must be a str, but got {type(module_type)}')
 
 
-if __name__ == "__main__":
-    TEST = Registry('test')
+if __name__=="__main__":
 
-    class BaseTest(object):
-        def __init__(self, name='', **kwargs):
-            self.name = name
+    UPLAOD = Registry("upload")
 
-        def __call__(self, **kwargs):
-            print(self.__class__.__name__, self.name)
+    class BaseUPLoad:
+        def __init__(self, txt=""):
+            self.txt = txt
 
-    @TEST.register_module
-    class Test1(BaseTest):
+        def __call__(self, ):
+            print(self.__class__.__name__, ":", self.txt)
+
+
+    @UPLAOD.register_module()
+    class UpLoadA(BaseUPLoad):
         def __init__(self, **kwargs):
-            super(Test1, self).__init__(**kwargs)
+            super(UpLoadA, self).__init__(**kwargs)
 
-    @TEST.register_module
-    class Test2(BaseTest):
+    @UPLAOD.register_module()
+    class UpLoadB(BaseUPLoad):
         def __init__(self, **kwargs):
-            super(Test2, self).__init__(**kwargs)
+            super(UpLoadB, self).__init__(**kwargs)
 
-    cfg = dict(type='Test1', name='t1')
-    t1 = build_from_cfg(cfg, TEST)
-    t1()
-    cfg = dict(type='Test1', name='t2')
-    t2 = build_from_cfg(cfg, TEST)
-    t2()
+    cfg = dict(type="UpLoadA", txt="hello")
+    op1 = build_from_cfg(cfg, UPLAOD)
+    op1()
+
+    cfg = dict(type="UpLoadB", txt="world")
+    op2 = build_from_cfg(cfg, UPLAOD)
+    op2()
