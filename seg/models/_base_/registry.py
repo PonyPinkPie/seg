@@ -9,10 +9,10 @@ NORMS = Registry('norms')
 PADDINGS = Registry('paddings')
 UPSAMPLES = Registry('upsamples')
 
-#
-BACKBONES = Registry('backbone')
-HEADS = Registry('head')
-NECKS = Registry('neck')
+# backbones heads necks
+BACKBONES = Registry('backbones')
+HEADS = Registry('heads')
+NECKS = Registry('necks')
 
 
 def build_activation(cfg, default_args=None):
@@ -22,6 +22,8 @@ def build_activation(cfg, default_args=None):
 def build_block(cfg, default_args=None):
     return build_from_cfg(cfg, BLOCKS, default_args)
 
+def build_convolution(cfg, default_args=None):
+    return build_from_cfg(cfg, CONVOLUTIONS, default_args)
 
 def build_layer(cfg, default_args=None):
     return build_from_cfg(cfg, LAYERS, default_args)

@@ -58,7 +58,7 @@ class Registry:
 
 def build_from_cfg(cfg: dict,
                    registry: Registry,
-                   update_args: dict = None):
+                   default_args: dict = None):
     """
     通过配置文件创建一个类，或者执行一个函数
     """
@@ -69,8 +69,8 @@ def build_from_cfg(cfg: dict,
         if module_obj is None:
             raise KeyError(f'{module_type} is not in the {registry.name} registry')
 
-        if update_args is not None:
-            args.update(**update_args)
+        if default_args is not None:
+            args.update(**default_args)
         return module_obj(**args)
     else:
         raise TypeError(

@@ -5,7 +5,7 @@ import math
 import warnings
 import copy
 
-from .registry import Registry, build_from_cfg
+from seg.models._base_.registry import Registry, build_from_cfg
 
 INITIALIZERS = Registry('initializer')
 

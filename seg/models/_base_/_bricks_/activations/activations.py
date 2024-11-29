@@ -1,7 +1,14 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from seg.models._base_.utils.registry import ACTIVATIONS
+from seg.models._base_ import ACTIVATIONS
+
+for module in [
+    nn.ReLU, nn.LeakyReLU, nn.PReLU, nn.RReLU, nn.ReLU6, nn.ELU,
+    nn.Sigmoid, nn.Tanh, nn.Identity, nn.GELU, nn.SiLU
+]:
+    ACTIVATIONS.register_module(module=module)
+
 
 
 @ACTIVATIONS.register_module(name='HSwish')

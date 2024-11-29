@@ -1,3 +1,4 @@
+from .registry import *
 from ._bricks_ import *
 from .backbones import *
 from .heads import *

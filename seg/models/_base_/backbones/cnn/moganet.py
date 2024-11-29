@@ -1,7 +1,3 @@
-import copy
-import math
-import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from seg.models._base_.utils import *
 
@@ -1114,7 +1110,7 @@ def moganet_xlarge(pretrained=False, **kwargs):
 
 if __name__ == '__main__':
     from seg.utils.easy_dict import EasyDict
-    from seg.models._base_.utils.registry import build_backbone
+    from seg.models._base_.registry import build_backbone
     cfg = {
         'type': 'MogaNet',
         'arch': 'tiny',
