@@ -176,6 +176,159 @@ def adjust_hue(image, factor):
     image[..., 0] = np.mod(image[..., 0] + factor * 360, 360)
     return cv2.cvtColor(image, cv2.COLOR_HSV2RGB)
 
+def get_random_crop_coords(height, width, crop_height, crop_width, h_start, w_start):
+    y1 = max(int((height-crop_height)*h_start), 0)
+    y2 = y1+ crop_height
+    x1 = max(int((width-crop_width)* w_start), 0)
+    x2 = x1+ crop_width
+    return x1, y1, x2, y2
+
+def random_crop(image, crop_height, crop_width, h_start, w_start):
+    height, width = image.shape[:2]
+    x1, y1, x2, y2 = get_random_crop_coords(height, width, crop_height, crop_width, h_start, w_start)
+    image = image[y1:y2, x1:x2]
+    return image
+
+def random_crop_padding(image, crop_height, crop_width, h_start, w_start, border_type=cv2.BORDER_CONSTANT, value=0):
+    height, width = image.shape[:2]
+    y1 = max(int((height-crop_height)*h_start), 0)
+    y2 = y1+ crop_height
+    x1 = max(int((width-crop_width)* w_start), 0)
+    x2 = x1+ crop_width
+    crop_img = image[y1:y2, x1:x2]
+    if x1 < 0 or y1 < 0 or x2 > width or y2 > height:
+        left_padding = -x1 if x1 < 0 else 0
+        right_padding = x2-width if x2 > width else 0
+        top_padding = -y1 if y1 < 0 else 0
+        bottom_padding = y2-height if y2 > height else 0
+        crop_img = cv2.copyMakeBorder(crop_img, top_padding, bottom_padding, left_padding, right_padding,
+                                        borderType=border_type, value=value)
+    return crop_img
+
+def _multiply_non_uint8(img, multiplier):
+    dtype = img.dtype
+    maxval = MAX_VALUES_BY_DTYPE.get(dtype, 1.0)
+    return  clip(img * multiplier,  dtype, maxval)
+
+
+def _multiply_uint8(img, multiplier):
+    dtype = img.dtype
+    maxval = MAX_VALUES_BY_DTYPE.get(dtype, 1.0)
+    img = img.astype(np.float32)
+    return clip(np.multiply(img, multiplier), dtype, maxval)
+
+def _multiply_uint8_optimized(img, multiplier):
+    if is_grayscale_image(img) or len(multiplier) == 1:
+        multiplier = multiplier[0]
+        lut = np.arange(0, 256, dtype=np.float32)
+        lut *= multiplier
+        lut = clip(lut, np.uint8, MAX_VALUES_BY_DTYPE[img.dtype])
+        func = _maybe_process_in_chunks(cv2.LUT, lut=lut)
+        return func(img)
+
+    channels = img.shape[-1]
+    lut = [np.arange(0, 256, dtype=np.float32)] * channels
+    lut = np.stack(lut, axis=-1)
+
+    lut *= multiplier
+    lut = clip(lut, np.uint8, MAX_VALUES_BY_DTYPE[img.dtype])
+
+    images = []
+    for i in range(channels):
+        func = _maybe_process_in_chunks(cv2.LUT, lut=lut[:, i])
+        images.append(func(img[:, :, i]))
+    return np.stack(images, axis=-1)
+
+def _maybe_process_in_chunks(process_fn, **kwargs):
+    """
+    Wrap OpenCV function to enable processing images with more than 4 channels.
+
+    Limitations:
+        This wrapper requires image to be the first argument and rest must be sent via named arguments.
+
+    Args:
+        process_fn: Transform function (e.g cv2.resize).
+        kwargs: Additional parameters.
+
+    Returns:
+        numpy.ndarray: Transformed image.
+
+    """
+
+    def __process_fn(img):
+        num_channels = img.shape[2] if len(img.shape) == 3 else 1
+        if num_channels > 4:
+            chunks = []
+            for index in range(0, num_channels, 4):
+                if num_channels - index == 2:
+                    # Many OpenCV functions cannot work with 2-channel images
+                    for i in range(2):
+                        chunk = img[:, :, index + i : index + i + 1]
+                        chunk = process_fn(chunk, **kwargs)
+                        chunk = np.expand_dims(chunk, -1)
+                        chunks.append(chunk)
+                else:
+                    chunk = img[:, :, index : index + 4]
+                    chunk = process_fn(chunk, **kwargs)
+                    chunks.append(chunk)
+            img = np.dstack(chunks)
+        else:
+            img = process_fn(img, **kwargs)
+        return img
+
+    return __process_fn
+
+
+def multiply(img, multiplier):
+    """
+    Args:
+        img (numpy.ndarray): Image.
+        multiplier (numpy.ndarray): Multiplier coefficient.
+
+    Returns:
+        numpy.ndarray: Image multiplied by `multiplier` coefficient.
+
+    """
+    if img.dtype == np.uint8:
+        if len(multiplier.shape) == 1:
+            return _multiply_uint8_optimized(img, multiplier)
+        return _multiply_uint8(img, multiplier)
+    return _multiply_non_uint8(img, multiplier)
+
+def gauss_noise(image, gauss):
+    dtype = image.dtype
+    image = image.astype("float32")
+    if len(image.shape) != len(gauss.shape):
+        if len(image.shape) == 3: # if img is rgb
+            gauss = np.expand_dims(gauss, axis=-1)
+        else:
+            # img is grey
+            gauss = np.mean(gauss, axis=-1)
+    image = image + gauss
+    maxval = MAX_VALUES_BY_DTYPE.get(dtype, 1.0)
+    return np.clip(image, 0, maxval).astype(dtype)
+
+def preserve_channel_dim(func):
+    """
+    Preserve dummy channel dim.
+
+    """
+    def wrapped_function(img, *args, **kwargs):
+        shape = img.shape
+        if len(shape) == 2:
+            img = np.expand_dims(img, axis=-1)
+            result = func(img, *args, **kwargs)
+            result = np.squeeze(result)
+        else:
+            result = func(img, *args, **kwargs)
+        return result
+
+    return wrapped_function
+
+@preserve_channel_dim
+def random_cutout(img, x1, y1, x2, y2, fill_in):
+    img[y1:y2, x1:x2, :] = fill_in
+    return img
 
 def normalize(image, mean, std, scale=1.0):
     #

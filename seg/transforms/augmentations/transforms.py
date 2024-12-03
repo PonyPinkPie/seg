@@ -1,10 +1,10 @@
 import torch
-
-from functional import *
-# from ..builder import TRANSFORMS
 import random
 import numpy as np
 import numbers
+from .functional import *
+from ..builder import TRANSFORMS
+
 
 
 class BaseTransform:
@@ -267,6 +267,242 @@ class ColorJitter(BaseTransform):
 
         return {"transforms": transforms}
 
+class RandomCrop(BaseTransform):
+    def __init__(self,
+                 height_ratio=1.,
+                 width_ratio=1.,
+                 padding=False,
+                 crop_height=0,
+                 crop_width=0,
+                 crop_object=False,
+                 crop_object_ratio=1.0,
+                 **kwargs):
+        super(RandomCrop).__init__(**kwargs)
+        self.height_ratio = height_ratio
+        self.width_ratio = width_ratio
+        self.padding = padding
+        self.crop_height = crop_height
+        self.crop_width = crop_width
+        self.crop_object = crop_object
+        self.crop_object_ratio = crop_object_ratio
+
+    def apply(self, image, crop_height, crop_width, h_start=0, w_start=0, **kwargs):
+        return random_crop(image, crop_height, crop_width, h_start, w_start) if not self.padding \
+            else random_crop_padding(image, crop_height, crop_width, h_start, w_start)
+
+    def apply_to_mask(self, mask, crop_height, crop_width, h_start=0, w_start=0, **kwargs):
+        return random_crop(mask, crop_height, crop_width, h_start, w_start) if not self.padding \
+            else random_crop_padding(mask, crop_height, crop_width, h_start, w_start)
+
+    def _get_yy_xx(self, params):
+        if self.crop_object_ratio > random.random():
+            if "mask" in params:
+                mask = params["mask"]
+            elif "masks" in params and len(params["masks"]) > 0:
+                mask = params["masks"][0]
+            else:
+                image = params["image"] if "image" in params else params["images"][0]
+                if len(image.shape) == 3: image = image[..., 0]
+                _, mask = cv2.threshold(image, 1, 255, cv2.THRESH_BINARY)
+        else:
+            image = params["image"] if "image" in params else params["images"][0]
+            if len(image.shape) == 3: image = image[..., 0]
+            _, mask = cv2.threshold(image, 1, 255, cv2.THRESH_BINARY)
+
+        yy, xx = np.where(mask)
+        return yy, xx
+
+    def get_params(self, **kwargs):
+        height, width = kwargs['image'].shape[:2] if kwargs.get('image', None) is not None \
+            else kwargs.get('images')[0].shape[:2]
+
+        if self.crop_height == 0:
+            crop_height = int(height * self.height_ratio)
+        else:
+            crop_height = self.crop_height
+        if self.crop_width == 0:
+            crop_width = int(width * self.width_ratio)
+        else:
+            crop_width = self.crop_width
+        no_object = True
+        if self.crop_object:
+            try:
+                yy, xx = self._get_yy_xx(kwargs)
+                index = random.randint(0, len(yy)-1)
+                coord = [max(int(xx[index] - crop_width*0.5), 0), max(int(yy[index] - crop_height*0.5), 0)]
+                w_start = min(coord[0] / (width - crop_width), 1.)
+                h_start = min(coord[1] / (height - crop_height), 1.)
+                no_object = False
+            except:
+                pass
+        if no_object:
+            h_start = random.random()
+            w_start = random.random()
+        return {
+            "h_start": h_start ,
+            "w_start": w_start,
+            "rows": width,
+            "cols": height,
+            "crop_height": crop_height,
+            "crop_width": crop_width
+        }
+
+class CenterCrop(RandomCrop):
+    def get_params(self, **params):
+        height, width = params["image"].shape[:2] if params.get("image", None) is not None \
+            else params.get("images")[0].shape[:2]
+        if self.crop_height == 0:
+            crop_height = int(height * self.height_ratio)
+        else:
+            crop_height = self.crop_height
+        if self.crop_width == 0:
+            crop_width = int(width * self.width_ratio)
+        else:
+            crop_width = self.crop_width
+
+        return {
+            "h_start": 0.5,
+            "w_start": 0.5,
+            "rows": width,
+            "cols": height,
+            "crop_height": crop_height,
+            "crop_width": crop_width
+        }
+
+class MultiplicativeNoise(BaseTransform):
+
+    def __init__(self, multiplier=(0.9, 1.1), per_channel=False, **kwargs):
+        super(MultiplicativeNoise, self).__init__(**kwargs)
+
+        if isinstance(multiplier, (int, float)):
+            self.multiplier = -multiplier, +multiplier
+        else:
+            self.multiplier = multiplier
+        self.per_channel = per_channel
+
+    @property
+    def targets(self):
+        return {"image": self.apply, "images": self.apply_to_images} # image only transform
+
+    def apply(self, image, multiplier=np.array([1]), **params):
+        return multiply(image, multiplier)
+
+    def get_params(self, **kwargs):
+        if self.multiplier[0] == self.multiplier[1]:
+            return {"multiplier": np.array([self.multiplier[0]])}
+
+        image = kwargs.get("image", None)
+        if image is None:
+            image = kwargs.get("images")[0]
+        # h, w = image.shape[:2]
+        if self.per_channel:
+            c = 1 if is_grayscale_image(image) else image.shape[-1]
+        else:
+            c = 1
+        multiplier = np.random.uniform(self.multiplier[0], self.multiplier[1], [c])
+        if is_grayscale_image(image):
+            multiplier = np.squeeze(multiplier)
+
+        return {"multiplier": multiplier}
+
+
+class GaussNoise(BaseTransform):
+    def __init__(self,var_limit=(10.0, 50.0), mean=0, **kwargs):
+        super(GaussNoise, self).__init__(**kwargs)
+        if isinstance(var_limit, (tuple, list)):
+            if var_limit[0] < 0:
+                raise ValueError("Lower var_limit should be non negative.")
+            if var_limit[1] < 0:
+                raise ValueError("Upper var_limit should be non negative.")
+            self.var_limit = var_limit
+        elif isinstance(var_limit, (int, float)):
+            if var_limit < 0:
+                raise ValueError("var_limit should be non negative.")
+
+            self.var_limit = (0, var_limit)
+        else:
+            raise TypeError(
+                "Expected var_limit type to be one of (int, float, tuple, list), got {}".format(type(var_limit))
+            )
+
+        self.mean = mean
+
+    @property
+    def targets(self):
+        return {"image": self.apply, "images": self.apply_to_images} # image only transform
+
+    def apply(self, img, gauss=None, **kwargs):
+        return gauss_noise(img, gauss=gauss)
+
+    def get_params(self, **kwargs):
+        image = kwargs["image"] if kwargs.get("image", None) is not None else kwargs.get("images")[0]
+
+        var = random.uniform(self.var_limit[0], self.var_limit[1])
+        sigma = var ** 0.5
+        random_state = np.random.RandomState(random.randint(0, 2 ** 32 - 1))
+
+        gauss = random_state.normal(self.mean, sigma, image.shape)
+        return {"gauss": gauss}
+
+class RandomCutout(BaseTransform):
+    """Args:
+           prob (float): cutout probability.
+           n_holes (int | tuple[int, int]): Number of regions to be dropped.
+               If it is given as a list, number of holes will be randomly
+               selected from the closed interval [`n_holes[0]`, `n_holes[1]`].
+           cutout_shape (tuple[int, int] | list[tuple[int, int]]): The candidate
+               shape of dropped regions. It can be `tuple[int, int]` to use a
+               fixed cutout shape, or `list[tuple[int, int]]` to randomly choose
+               shape from the list.
+           cutout_ratio (tuple[float, float] | list[tuple[float, float]]): The
+               candidate ratio of dropped regions. It can be `tuple[float, float]`
+               to use a fixed ratio or `list[tuple[float, float]]` to randomly
+               choose ratio from the list. Please note that `cutout_shape`
+               and `cutout_ratio` cannot be both given at the same time.
+           fill_in (tuple[float, float, float] | tuple[int, int, int]): The value
+               of pixel to fill in the dropped regions. Default: (0, 0, 0).
+       """
+
+    def __init__(self, n_holes=1, cutout_shape=None, cutout_ratio=(0.1, 0.1), fill_in=0, **kwargs):
+        super(RandomCutout, self).__init__(**kwargs)
+
+        assert (cutout_shape is None) ^ (cutout_ratio is None), 'Either cutout_shape or cutout_ratio should be specified.'
+        assert (isinstance(cutout_shape, (list, tuple)) or isinstance(cutout_ratio, (list, tuple)))
+        if isinstance(n_holes, tuple):
+            assert len(n_holes) == 2 and 0 <= n_holes[0] < n_holes[1]
+        else:
+            n_holes = (n_holes, n_holes)
+        self.n_holes = n_holes
+        self.fill_in = fill_in
+        self.with_ratio = cutout_ratio is not None
+        self.candidates = cutout_ratio if self.with_ratio else cutout_shape
+        if not isinstance(self.candidates, list):
+            self.candidates = [self.candidates]
+
+    def apply(self, img, **kwargs):
+        return random_cutout(img, **kwargs)
+
+    def apply_to_mask(self, img, **kwargs):
+        return random_cutout(img, **kwargs)
+
+    def get_params(self, **kwargs):
+        height, width = kwargs["image"].shape[:2] if kwargs.get("image", None) is not None else kwargs.get("images")[0].shape[:2]
+        # cutout = True if np.random.rand() < self.prob else False
+        n_holes = np.random.randint(self.n_holes[0], self.n_holes[1] + 1)
+        for _ in range(n_holes):
+            x1 = np.random.randint(0, width)
+            y1 = np.random.randint(0, height)
+            index = np.random.randint(0, len(self.candidates))
+            if not self.with_ratio:
+                cutout_w, cutout_h = self.candidates[index]
+            else:
+                cutout_w = int(self.candidates[index][0] * width)
+                cutout_h = int(self.candidates[index][1] * height)
+
+            x2 = np.clip(x1 + cutout_w, 0, width)
+            y2 = np.clip(y1 + cutout_h, 0, height)
+
+            return {"x1": x1, "x2": x2, "y1": y1, "y2": y2, "fill_in": self.fill_in}
 
 class Normalize(BaseTransform):
     def __init__(self,
@@ -292,7 +528,8 @@ class Normalize(BaseTransform):
 
     def apply_to_images(self, images, **kwargs):
         assert len(images) == len(self.means) == len(self.stds), \
-            f"len of images must be equal means and stds, but got len(images) = {len(images)}, len(self.means) = {len(self.means)} len(self.stds) = {len(self.stds)}"
+            (f"len of images must be equal means and stds, but got len(images) = {len(images)}, "
+             f"len(self.means) = {len(self.means)} len(self.stds) = {len(self.stds)}")
         return [self.apply(image, np.array(mean), np.array(std)) for image, mean, std in
                 zip(images, self.means, self.stds)]
 
