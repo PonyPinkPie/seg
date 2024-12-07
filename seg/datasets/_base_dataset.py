@@ -45,7 +45,3 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
 
     def label_index_dict(self):
         return self.index_dict
-
-    def __getitem__(self, item):
-        image_folder = self.image_list[item]
-        image_paths = ls_folder(image_folder, postfix=IMAGE_POSTFIX)

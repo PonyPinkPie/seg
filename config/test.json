@@ -1,0 +1,62 @@
+{
+  "common": {
+    "workdir": "./workdir",
+    "distribute": false,
+    "logger_cfg": {
+      "handlers": [
+        {
+          "type": "StreamHandler",
+          "level": "INFO"
+        },
+        {
+          "type": "FileHandler",
+          "level": "INFO"
+        }
+      ]
+    },
+    "cudnn_deterministic": false,
+    "cudnn_benchmark": false,
+    "seed": 0,
+    "metrics": {}
+  },
+  "inference": {
+    "multi_label": false,
+    "transform": [
+      {"type": "Resize", "width": 512, "height": 512},
+      {"type": "Normalize"},
+      {"type": "ToTensor"}
+    ],
+    "model": {
+
+    }
+  },
+  "data": {
+    "train": {
+      "transform": [
+        {"type": "Resize", "width": 512, "height": 512},
+        {"type": "Normalize"},
+        {"type": "ToTensor"}
+      ],
+      "datasets": {},
+      "dataloader": {}
+    },
+    "valid": {
+      "transform": [
+        {"type": "Resize", "width": 512, "height": 512},
+        {"type": "Normalize"},
+        {"type": "ToTensor"}
+      ],
+      "datasets": {},
+      "dataloader": {}
+    }
+  },
+  "max_epochs": 100,
+  "optimizer": {
+
+  },
+  "lr_scheduler": {
+
+  },
+  "log_interval": 10,
+  "train_valid_interval": 1
+}
