@@ -1,0 +1,22 @@
+{
+  "common": {
+    "workdir": "C:\\mycode\\mycode\\seg\\workdir\\test",
+    "distribute": false,
+    "logger_cfg": {
+      "handlers": [
+        {
+          "type": "StreamHandler",
+          "level": "INFO"
+        },
+        {
+          "type": "FileHandler",
+          "level": "INFO"
+        }
+      ]
+    },
+    "cudnn_deterministic": false,
+    "cudnn_benchmark": false,
+    "seed": 0,
+    "metrics": {}
+  }
+}

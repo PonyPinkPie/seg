@@ -1,4 +1,5 @@
 import json
+import orjson
 from os.path import join as opj
 from os.path import exists as ope
 import natsort
@@ -27,10 +28,18 @@ def ls_folder(folder, postfix=None, use_sort=True):
         return []
 
 
+# def load_json(json_path):
+#     if ope(json_path):
+#         with open(json_path, 'r') as f:
+#             json_info = json.load(f)
+#         return json_info
+#     else:
+#         raise FileNotFoundError(f"json file {json_path} not found")
+
 def load_json(json_path):
     if ope(json_path):
         with open(json_path, 'r') as f:
-            json_info = json.load(f)
+            json_info = orjson.loads(f.read())
         return json_info
     else:
         raise FileNotFoundError(f"json file {json_path} not found")

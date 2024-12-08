@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-from seg.models._base_ import ConvModule, HEADS
+from seg.models.registry import HEADS
 from .base_head import BaseHead
-
+from seg.models._base_._bricks_.conv_module import ConvModule
 
 @HEADS.register_module()
 class FCNHead(BaseHead):

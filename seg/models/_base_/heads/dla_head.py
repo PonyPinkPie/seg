@@ -3,8 +3,9 @@ import torch.nn.functional as F
 import math
 import torch.nn as nn
 import numpy as np
-from seg.models._base_ import HEADS, build_upsample, ConvModule
+from seg.models.registry import *
 from seg.losses import build_loss
+from seg.models._base_._bricks_ import *
 
 def fill_up_weights(up):
     w = up.weight.data
@@ -38,6 +39,13 @@ class IDAUP(nn.Module):
             if f == 1:
                 up = nn.Identity()
             else:
+                # if use_deconv:
+                #     up = nn.ConvTranspose2d(out_dim, out_dim, f * 2, stride=f, padding=f // 2,
+                #                             output_padding=0, groups=out_dim, bias=False)
+                #     fill_up_weights(up)
+                # else:
+                #     # up = nn.Upsample(scale_factor=f, mode=up_mode, align_corners=align_corners)
+                #     up = build_upsample_layer(upsample_cfg)
                 if upsample_cfg.get("type") == "deconv":
                     upsample_cfg["in_channels"] = out_dim
                     upsample_cfg["out_channels"] = out_dim
@@ -47,13 +55,13 @@ class IDAUP(nn.Module):
                     upsample_cfg["groups"] = out_dim
                     upsample_cfg["output_padding"] = 0
                     upsample_cfg["bias"] = False
-                elif upsample_cfg.get("type") == "pixel_shuffle":
+                elif  upsample_cfg.get("type") == "pixel_shuffle":
                     upsample_cfg["in_channels"] = out_dim
                     upsample_cfg["out_channels"] = out_dim
                     upsample_cfg["scale_factor"] = f
                     upsample_cfg["upsample_kernel"] = upsample_cfg.get("upsample_kernel", 3)
 
-                up = build_upsample(upsample_cfg)
+                up = build_upsample_layer(upsample_cfg)
                 if upsample_cfg.get("type") == "deconv":
                     fill_up_weights(up)
 
@@ -63,7 +71,7 @@ class IDAUP(nn.Module):
         for i in range(1, len(channels)):
             node = ConvModule(out_dim * 2, out_dim, kernel_size=kernel, stride=1,
                               padding=kernel // 2,
-                              norm_cfg=norm_cfg, act_cfg=act_cfg, order=order)
+                              norm_cfg=norm_cfg, act_cfg=act_cfg,order=order)
 
             setattr(self, 'node_' + str(i), node)
 
@@ -97,9 +105,7 @@ class IDAUP(nn.Module):
 
 
 class DLAUP(nn.Module):
-    def __init__(self,
-                 channels,
-                 scales=(1, 2, 4, 8, 16),
+    def __init__(self, channels, scales=(1, 2, 4, 8, 16),
                  in_channels=None,
                  norm_cfg=dict(type='BN', requires_grad=True),
                  act_cfg=dict(type='ReLU6'),
@@ -140,8 +146,7 @@ class DLAUP(nn.Module):
 @HEADS.register_module()
 class DLAHead(nn.Module):
 
-    def __init__(self,
-                 num_classes,
+    def __init__(self, num_classes,
                  in_channels=[16, 32, 128, 256, 512, 1024],
                  norm_cfg=dict(type='BN', requires_grad=True),
                  act_cfg=dict(type='ReLU', inplace=True),
@@ -175,21 +180,20 @@ class DLAHead(nn.Module):
         self.num_classes = num_classes
 
         scales = [2 ** i for i in range(len(in_channels))]
-        self.dla_up = DLAUP(
-            in_channels, scales=scales,
-            norm_cfg=norm_cfg,
-            act_cfg=act_cfg,
-            upsample_cfg=upsample_cfg,
-            order=order
-        )
+        self.dla_up = DLAUP(in_channels, scales=scales,
+                            norm_cfg=norm_cfg,
+                            act_cfg=act_cfg,
+                            upsample_cfg=upsample_cfg,
+                            order=order
+                            )
         up_factor = 2
 
-        self.up = build_upsample(dict(type="bilinear", scale_factor=up_factor))
+        self.up = build_upsample_layer(dict(type="bilinear", scale_factor=up_factor))
 
         self.fc = nn.Sequential(
             nn.Dropout2d(dropout),
-            nn.Conv2d(in_channels[0], num_classes, kernel_size=1, stride=1, padding=0, bias=True)
-        )
+            nn.Conv2d(in_channels[0], num_classes, kernel_size=1,
+                      stride=1, padding=0, bias=True))
 
         if sampler is not None:
             # self.sampler = build_pixel_sampler(sampler, context=self)
@@ -198,6 +202,15 @@ class DLAHead(nn.Module):
             self.sampler = None
 
         self.init_weights()
+
+    def forward(self, x, return_feat=False, **kwargs):
+
+        feat = self.dla_up(x)
+        logits = self.fc(feat)
+        if return_feat:
+            return logits, feat
+        else:
+            return logits
 
     def init_weights(self):
 
@@ -210,7 +223,7 @@ class DLAHead(nn.Module):
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
                 m.weight.data.normal_(0, math.sqrt(2. / n))
-                m.bias.data.fill_(-math.log((1 - 0.01) / 0.01))
+                m.bias.data.fill_(-math.log((1-0.01) / 0.01))
             elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
@@ -226,9 +239,9 @@ class DLAHead(nn.Module):
         seg_label = seg_label.squeeze(1)
         input_size = seg_label.shape[1:]
         seg_logit = F.interpolate(input=seg_logit,
-                                  size=input_size,
-                                  mode='bilinear',
-                                  align_corners=self.align_corners)
+                           size=input_size,
+                           mode='bilinear',
+                           align_corners=self.align_corners)
 
         if not isinstance(self.loss_decode, nn.ModuleList):
             losses_decode = [self.loss_decode]
@@ -237,20 +250,11 @@ class DLAHead(nn.Module):
 
         for loss_decode in losses_decode:
             loss[loss_decode.loss_name] = loss_decode(
-                seg_logit,
-                seg_label,
-                weight=seg_weight,
-                ignore_label=self.ignore_label)
+                 seg_logit,
+                 seg_label,
+                 weight=seg_weight,
+                 ignore_label=self.ignore_label)
         return loss
-
-    def forward(self, x, return_feat=False, **kwargs):
-
-        feat = self.dla_up(x)
-        logits = self.fc(feat)
-        if return_feat:
-            return logits, feat
-        else:
-            return logits
 
     def forward_train(self, inputs, gt_semantic_seg, weight=None, **kwargs):
         """Forward function for training.

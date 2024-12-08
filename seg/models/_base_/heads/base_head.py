@@ -3,7 +3,7 @@ from abc import ABCMeta, abstractmethod
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from seg.models._base_ import normal_init
+from seg.models.utils.weight_init import normal_init
 from seg.losses import build_loss
 
 

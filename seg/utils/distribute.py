@@ -45,3 +45,21 @@ def get_dist_info():
         world_size = 1
 
     return rank, world_size
+
+def is_dist_avail_and_initialized():
+    if not dist.is_available():
+        return False
+    if not dist.is_initialized():
+        return False
+    return True
+
+def reduce_value(value, average=True):
+    world_size = dist.get_world_size() if is_dist_avail_and_initialized() else 1
+    if world_size < 2:
+        return value
+
+    with torch.no_grad():
+        dist.all_reduce(value)
+        if average:
+            value /= world_size
+        return value

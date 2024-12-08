@@ -1,3 +1,5 @@
+import os
+
 import torch
 from torch.backends import cudnn
 import random
@@ -9,6 +11,8 @@ from seg.loggers import build_logger
 
 class BaseRunner(object):
     def __init__(self, cfg):
+        self.workdir = cfg.get('workdir', 'workdir')
+        os.makedirs(self.workdir, exist_ok=True)
         logger_cfg = cfg.get('logger')
         if logger_cfg is None:
             logger_cfg = dict(
@@ -19,7 +23,6 @@ class BaseRunner(object):
             )
         self.logger = self._build_logger(logger_cfg)
 
-        self.workdir = cfg.get('workdir', './workdir')
         self.distribute = cfg.get('distribute', False)
 
         self.gpu_num = devices_count()

@@ -1,6 +1,11 @@
+import copy
+import math
+import torch
+import torch.nn as nn
 import torch.nn.functional as F
-from seg.models._base_.utils import *
-
+from seg.models.registry import *
+from seg.utils.checkpoint import get_state_dict
+from seg.models.utils import *
 
 def build_act_layer(act_type):
     """Build activation layer."""

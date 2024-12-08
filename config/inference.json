@@ -1,0 +1,123 @@
+{
+  "common": {
+    "workdir": "/workspace/mycode/03-seg/seg/workdir/test",
+    "distribute": false,
+    "logger_cfg": {
+      "handlers": [
+        {
+          "type": "StreamHandler",
+          "level": "INFO"
+        },
+        {
+          "type": "FileHandler",
+          "level": "INFO"
+        }
+      ]
+    },
+    "cudnn_deterministic": false,
+    "cudnn_benchmark": false,
+    "seed": 0,
+    "metrics": {}
+  },
+  "inference": {
+    "multi_label": false,
+    "transform": [
+      {"type": "Resize", "width": 512, "height": 512},
+      {"type": "Normalize"},
+      {"type": "ToTensor"}
+    ],
+    "model": {
+      "type": "EncoderDecoder",
+      "backbone": {
+        "type": "MogaNet",
+        "arch": "tiny",
+        "num_classes": null,
+        "out_level": [0, 1, 2, 3]
+      },
+      "decoder_head": {
+        "type": "DLAHead",
+        "in_channels": [3, 64, 128, 256],
+        "down_ratio": 2,
+        "num_classes": 11,
+        "align_corners": false,
+        "norm_cfg": {"type": "BN"},
+        "act_cfg": {"type": "xUnitS"},
+        "loss": [
+          {
+            "type": "AutoSegLoss",
+            "parameterization": "bezier",
+            "theta": [
+              0.00056972844,
+              0.64372045,
+              0.338589169,
+              0.70554336,
+              0.625281252,
+              0.779551927,
+              0.69037557,
+              0.01306289,
+              0.834170515,
+              0.962431815,
+              0.942998269,
+              0.980038125
+            ]
+          },
+          {"type": "CrossEntropyLoss"}
+        ]
+      },
+      "parameterization": "bezier",
+      "auxiliary_head": [
+      {
+        "type": "FCNHead",
+        "in_channels": 256,
+        "num_convs": 1,
+        "head_width": 256,
+        "in_index": -1,
+        "loss": [
+          {
+            "type": "LovaszLoss",
+            "loss_weight": 0.4
+          },
+          {
+            "type": "CrossEntropyLoss",
+            "loss_weight": 0.4
+          }
+        ]
+      },
+      {
+        "type": "FCNHead",
+        "in_channels": 128,
+        "num_convs": 1,
+        "head_width": 256,
+        "in_index": -2,
+        "loss": [
+          {
+            "type": "LovaszLoss",
+            "loss_weight": 0.4
+          },
+          {
+            "type": "CrossEntropyLoss",
+            "loss_weight": 0.4
+          }
+        ]
+      },
+      {
+        "type": "FCNHead",
+        "in_channels": 64,
+        "num_convs": 1,
+        "head_width": 256,
+        "in_index": -3,
+        "loss": [
+          {
+            "type": "LovaszLoss",
+            "loss_weight": 0.4
+          },
+          {
+            "type": "CrossEntropyLoss",
+            "loss_weight": 0.4
+          }
+        ]
+      }
+    ]
+    }
+  }
+}

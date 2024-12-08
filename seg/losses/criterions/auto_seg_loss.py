@@ -39,8 +39,8 @@ def map_to_one_hot(x, num_class):
 @LOSSES.register_module()
 class AutoSegLoss(nn.Module):
     def __init__(self,
-                 num_class,
-                 theta,
+                 num_classes=10,
+                 theta=None,
                  parameterization=None,
                  target_metric='mIoU',
                  drop_bg=False,
@@ -50,13 +50,14 @@ class AutoSegLoss(nn.Module):
                  loss_weight=1.0):
         super(AutoSegLoss, self).__init__()
 
-        self.num_class = int(num_class)
+        self.num_class = int(num_classes)
         self.inplace = inplace
 
         if isinstance(theta, torch.Tensor):
             self.theta = theta.detach().clone()
         else:
-            self.theta = torch.tensor(theta, dtype=torch.float, device=torch.cuda.current_device())
+            # self.theta = torch.tensor(theta, dtype=torch.float, device=torch.cuda.current_device())
+            self.theta = torch.tensor(theta, dtype=torch.float)
 
         allowed_parameterization = ['bezier', 'linear']
         if parameterization not in allowed_parameterization:

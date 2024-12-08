@@ -60,7 +60,7 @@ class BaseTransform:
         return kwargs
 
 
-# @TRANSFORMS.register_module()
+@TRANSFORMS.register_module()
 class Resize(BaseTransform):
     def __init__(self, height, width, interpolation=cv2.INTER_LINEAR, padding=0., prob=1., always_apply=False):
         super(Resize, self).__init__(always_apply, prob)
@@ -94,7 +94,7 @@ class Resize(BaseTransform):
         else:
             raise ValueError('No image or images in Resize')
 
-
+@TRANSFORMS.register_module()
 class HorizontalFlip(BaseTransform):
     def __init__(self, always_apply=False, p=0.5):
         super(HorizontalFlip, self).__init__(always_apply, p)
@@ -119,7 +119,7 @@ class HorizontalFlip(BaseTransform):
         else:
             raise ValueError('No image or images in HorizontalFlip')
 
-
+@TRANSFORMS.register_module()
 class VerticalFlip(BaseTransform):
     def __init__(self, always_apply=False, p=0.5):
         super(VerticalFlip, self).__init__(always_apply, p)
@@ -144,7 +144,7 @@ class VerticalFlip(BaseTransform):
         else:
             raise ValueError('No image or images in VerticalFlip')
 
-
+@TRANSFORMS.register_module()
 class CenterFlip(BaseTransform):
     def __init__(self, always_apply=False, p=0.5):
         super(CenterFlip, self).__init__(always_apply, p)
@@ -169,7 +169,7 @@ class CenterFlip(BaseTransform):
         else:
             raise ValueError('No image or images in CenterFlip')
 
-
+@TRANSFORMS.register_module()
 class Rotate(BaseTransform):
     def __init__(self,
                  always_apply=False,
@@ -212,7 +212,7 @@ class Rotate(BaseTransform):
         else:
             raise ValueError('No image or images in Rotate')
 
-
+@TRANSFORMS.register_module()
 class ColorJitter(BaseTransform):
     def __init__(self,
                  brightness=0.2,
@@ -266,7 +266,7 @@ class ColorJitter(BaseTransform):
         random.shuffle(transforms)
 
         return {"transforms": transforms}
-
+@TRANSFORMS.register_module()
 class RandomCrop(BaseTransform):
     def __init__(self,
                  height_ratio=1.,
@@ -346,7 +346,7 @@ class RandomCrop(BaseTransform):
             "crop_height": crop_height,
             "crop_width": crop_width
         }
-
+@TRANSFORMS.register_module()
 class CenterCrop(RandomCrop):
     def get_params(self, **params):
         height, width = params["image"].shape[:2] if params.get("image", None) is not None \
@@ -368,7 +368,7 @@ class CenterCrop(RandomCrop):
             "crop_height": crop_height,
             "crop_width": crop_width
         }
-
+@TRANSFORMS.register_module()
 class MultiplicativeNoise(BaseTransform):
 
     def __init__(self, multiplier=(0.9, 1.1), per_channel=False, **kwargs):
@@ -405,7 +405,7 @@ class MultiplicativeNoise(BaseTransform):
 
         return {"multiplier": multiplier}
 
-
+@TRANSFORMS.register_module()
 class GaussNoise(BaseTransform):
     def __init__(self,var_limit=(10.0, 50.0), mean=0, **kwargs):
         super(GaussNoise, self).__init__(**kwargs)
@@ -443,7 +443,7 @@ class GaussNoise(BaseTransform):
 
         gauss = random_state.normal(self.mean, sigma, image.shape)
         return {"gauss": gauss}
-
+@TRANSFORMS.register_module()
 class RandomCutout(BaseTransform):
     """Args:
            prob (float): cutout probability.
@@ -503,7 +503,7 @@ class RandomCutout(BaseTransform):
             y2 = np.clip(y1 + cutout_h, 0, height)
 
             return {"x1": x1, "x2": x2, "y1": y1, "y2": y2, "fill_in": self.fill_in}
-
+@TRANSFORMS.register_module()
 class Normalize(BaseTransform):
     def __init__(self,
                  mean=(0.485, 0.456, 0.406),
@@ -533,7 +533,7 @@ class Normalize(BaseTransform):
         return [self.apply(image, np.array(mean), np.array(std)) for image, mean, std in
                 zip(images, self.means, self.stds)]
 
-
+@TRANSFORMS.register_module()
 class ToTensor(BaseTransform):
     def __init__(self, transpose_mask=False, **kwargs):
         super(ToTensor, self).__init__(**kwargs)

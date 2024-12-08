@@ -1,8 +1,8 @@
 import torch
 from .base_runner import BaseRunner
-from seg.transforms import build_transform
+from seg.transforms.compose import Compose
 
-from seg.models import build_model
+from seg.models.registry import build_segmentation
 from seg.utils.distribute import init_dist_pytorch, get_dist_info, cuda_is_available, devices_count
 # from seg.metrics import build_metrics
 
@@ -21,7 +21,7 @@ class InferenceRunner(BaseRunner):
 
     def _build_model(self, cfg):
         self.logger.info(f"Building model.")
-        self.model = build_model(cfg)
+        self.model = build_segmentation(cfg)
         if cuda_is_available():
             if self.distribute:
                 self.model = torch.nn.parallel.DistributedDataParallel(
@@ -38,7 +38,7 @@ class InferenceRunner(BaseRunner):
         self.logger.info(f"Building model Done.")
 
     def _build_transform(self, cfg):
-        return build_transform(cfg)
+        return Compose(cfg)
 
 
     def compute(self, output):
@@ -55,7 +55,8 @@ class InferenceRunner(BaseRunner):
 
     def __call__(self, image, mask):
         with torch.no_grad():
-            image = self.transform(image=image, mask=mask)['image']
+            data = {'image': image, 'mask': mask}
+            image = self.transform(**data)['image']
             image = image.unsqueeze(0)
             if self.ues_gpu:
                 image = image.cuda()
