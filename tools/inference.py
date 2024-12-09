@@ -11,7 +11,7 @@ from seg.utils.config import file_to_config
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cfg', type=str, default='C:\mycode\mycode\seg\config\inference.json')
+    parser.add_argument('--cfg', type=str, default='/workspace/mycode/03-seg/seg/config/inference.json')
     args = parser.parse_args()
     return args
 

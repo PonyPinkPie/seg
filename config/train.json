@@ -119,5 +119,83 @@
         }
       ]
     }
+  },
+  "data": {
+    "train": {
+      "transform": [
+          {"type": "Resize", "width": 512, "height": 512},
+          {"type": "Normalize"},
+          {"type": "ToTensor"}
+      ],
+      "dataset": {
+        "type": "DPST",
+        "root": "/data/wuxiaobin/datasets/Seg/Wire",
+        "mode": "train",
+        "shape_labels": [
+          "posun",
+          "AFM",
+          "SCT",
+          "PFM",
+          "OX",
+          "EXN_rough",
+          "EXN",
+          "EXC",
+          "AOG",
+          "AOC"
+        ]
+      },
+      "dataloader": {
+        "type": "DataLoader",
+        "sample_per_gpu": 8,
+        "workers_per_gpu": 4,
+        "shuffle": true,
+        "drop_last": true,
+        "pin_memory": true
+      }
+    },
+    "valid": {
+      "transform": [
+          {"type": "Resize", "width": 512, "height": 512},
+          {"type": "Normalize"},
+          {"type": "ToTensor"}
+        ],
+      "dataset": {
+        "type": "DPST",
+        "root": "/data/wuxiaobin/datasets/Seg/Wire",
+        "mode": "valid",
+        "shape_labels": [
+          "posun",
+          "AFM",
+          "SCT",
+          "PFM",
+          "OX",
+          "EXN_rough",
+          "EXN",
+          "EXC",
+          "AOG",
+          "AOC"
+        ]
+      },
+      "dataloader": {
+        "type": "DataLoader",
+        "sample_per_gpu": 8,
+        "workers_per_gpu": 4,
+        "shuffle": false,
+        "drop_last": false,
+        "pin_memory": true
+      }
+    },
+    "optimizer": {
+      "type": "adamw",
+      "lr": 0.001,
+      "weight_decay": 0.00202158
+    },
+    "max_epochs": 120,
+    "lr_scheduler": {
+      "type": "CosineAnnealingWarmRestarts",
+      "T_0": 40,
+      "eta_min": 1e-8
+
+    }
   }
 }

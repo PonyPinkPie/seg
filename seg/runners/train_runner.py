@@ -1,20 +1,19 @@
-
 from .inference_runner import InferenceRunner
 
 from seg.dataloaders import build_dataloader
-from seg.transforms import build_transform
 from seg.datasets import build_dataset
 from seg.optimizers import build_optimizer
 from seg.lr_schedulers import build_lr_scheduler
 from collections.abc import Iterable
 import numpy as np
 
+
 class TrainRunner(InferenceRunner):
     def __init__(self, train_cfg, inference_cfg, base_cfg=None):
         super().__init__(inference_cfg, base_cfg)
 
-        self.train_dataloader = self._build_dataloader(train_cfg['data']['train'])
-        self.valid_dataloader = self._build_dataloader(train_cfg['data']['valid'])
+        self.train_dataloader = self._build_dataloader(train_cfg['train'])
+        self.valid_dataloader = self._build_dataloader(train_cfg['valid'])
 
         self.optimizer = self._build_optimizer(train_cfg['optimizer'])
         self.lr_scheduler = self._build_lr_scheduler(train_cfg['lr_scheduler'])
@@ -23,7 +22,7 @@ class TrainRunner(InferenceRunner):
         self.train_valid_interval = train_cfg.get('train_valid_interval', 1)
 
     def _build_dataloader(self, cfg):
-        transform = build_transform(cfg['transform'])
+        transform = self._build_transform(cfg['transform'])
         dataset = build_dataset(cfg['dataset'], dict(transform=transform))
         shuffle = cfg['dataloader'].get('shuffle', False)
         dataloader = build_dataloader(
@@ -35,8 +34,7 @@ class TrainRunner(InferenceRunner):
         return build_optimizer(cfg, dict(self.model.parameters()))
 
     def _build_lr_scheduler(self, cfg):
-        return build_lr_scheduler(cfg, dict(optimizer=self.optimizer, niter=len(self.train_dataloader)))
-
+        return build_lr_scheduler(cfg, dict(optimizer=self.optimizer))
 
     @property
     def epoch(self):
@@ -62,10 +60,13 @@ class TrainRunner(InferenceRunner):
                 param['lr'] = val
 
     def _train(self):
+        self.model.train()
+        self.logger.info('Epoch {}, start training'.format(self.epoch + 1))
+
+
 
 
         pass
-
 
     def _valid(self):
 
@@ -80,5 +81,3 @@ class TrainRunner(InferenceRunner):
 
             if self.epoch % self.train_valid_interval == 0:
                 self._valid()
-
-

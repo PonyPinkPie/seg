@@ -3,12 +3,15 @@ from torch.utils.data import Dataset
 from seg.utils.io import IMAGE_POSTFIX, opj, ope, load_json, annotation2mask, read_image
 from seg.transforms import Compose
 from seg.loggers import build_logger
+from .registry import DATASETS
 
-class DpstDataset(Dataset):
+
+@DATASETS.register_module()
+class DPST(Dataset):
     def __init__(self,
                  root=None,
                  mode=None,
-                 transforms=None,
+                 transform=None,
                  image_labels=[],
                  shape_labels=[],
                  logger=None,
@@ -17,7 +20,7 @@ class DpstDataset(Dataset):
         self.root = root
         assert mode in ['train', 'valid', 'test'], f"mode must be 'train' or 'valid' or 'test'"
         self.mode = mode
-        self.transforms = transforms if transforms is None else Compose(transforms)
+        self.transform = transform
         self.image_labels = sorted(image_labels)
         self.shape_labels = sorted(shape_labels)
         self.logger = logger
@@ -87,8 +90,8 @@ class DpstDataset(Dataset):
 
     def __getitem__(self, item):
         data_info = self.prepare_one_data(item)
-        if self.transforms:
-            data_info = self.transforms(**data_info)
+        if self.transform:
+            data_info = self.transform(**data_info)
         return data_info
 
 

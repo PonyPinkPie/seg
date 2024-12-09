@@ -41,17 +41,17 @@ class InferenceRunner(BaseRunner):
         return Compose(cfg)
 
 
-    def compute(self, output):
-        if self.multi_label:
-            output = output.sigmoid()
-            output = torch.where(output >= 0.5,
-                                 torch.full_like(output, 1),
-                                 torch.full_like(output, 0)).long()
-
-        else:
-            output = output.softmax(dim=1)
-            _, output = torch.max(output, dim=1)
-        return output
+    # def compute(self, output):
+    #     if self.multi_label:
+    #         output = output.sigmoid()
+    #         output = torch.where(output >= 0.5,
+    #                              torch.full_like(output, 1),
+    #                              torch.full_like(output, 0)).long()
+    #
+    #     else:
+    #         output = output.softmax(dim=1)
+    #         _, output = torch.max(output, dim=1)
+    #     return output
 
     def __call__(self, image, mask):
         with torch.no_grad():
@@ -62,7 +62,7 @@ class InferenceRunner(BaseRunner):
                 image = image.cuda()
 
             output = self.model(image)
-            output = self.compute(output)
+            # output = self.compute(output)
             output = output.squeeze().cpu().numpy()
         return output
 

@@ -79,13 +79,13 @@ class Resize(BaseTransform):
 
     def get_params(self, **kwargs):
         padding = random.random() < self.padding
-        if kwargs.get('image', None):
+        if 'image' in kwargs.keys():
             return {
                 'cols': kwargs['image'].shape[1],
                 'rows': kwargs['image'].shape[0],
                 'padding': padding,
             }
-        elif kwargs.get('images', None):
+        elif 'images' in kwargs.keys():
             return {
                 'cols': kwargs['image'][0].shape[1],
                 'rows': kwargs['image'][0].shape[0],
@@ -513,8 +513,8 @@ class Normalize(BaseTransform):
                  scale=255.0,
                  **kwargs):
         super(Normalize, self).__init__(**kwargs)
-        self.mean = mean
-        self.std = std
+        self.mean = np.array(mean,dtype=np.float32)
+        self.std = np.array(std, dtype=np.float32)
         self.means = means
         self.stds = stds
         self.scale = scale
@@ -522,6 +522,9 @@ class Normalize(BaseTransform):
     @property
     def targets(self):
         return {'image': self.apply, 'images': self.apply_to_images}
+
+    def get_params(self, **kwargs):
+        return {'mean': self.mean, 'std': self.std}
 
     def apply(self, image, mean, std, **kwargs):
         return normalize(image, mean, std, self.scale)

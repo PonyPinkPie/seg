@@ -2,7 +2,8 @@ from seg.utils.registry import Registry, build_from_cfg
 from torch.utils.data import DataLoader
 
 DATALOADERS = Registry('dataloader')
-DATALOADERS.register_module(DataLoader)
+DATALOADERS.register_module('DataLoader', module=DataLoader)
+
 
 def build_dataloader(cfg, num_gpus, distributed, default_args=None):
     cfg_ = cfg.copy()

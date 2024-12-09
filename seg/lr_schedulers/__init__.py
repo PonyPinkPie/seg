@@ -1,1 +1,1 @@
-from .registry import build_lr_scheduler
+from .registry import *

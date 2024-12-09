@@ -330,21 +330,29 @@ def random_cutout(img, x1, y1, x2, y2, fill_in):
     img[y1:y2, x1:x2, :] = fill_in
     return img
 
+@preserve_channel_dim
 def normalize(image, mean, std, scale=1.0):
     #
     if image.ndim == 2:
         mean = mean.mean()
         std = std.mean()
-    mean *= scale
-    std *= scale
-
+    if image.max() > 1 and mean.max() < 1:
+        mean = mean * 255
+        std = std * 255
+    elif image.max() < 1 and mean.max() > 1:
+        mean = mean / 255
+        std = std / 255
     denominator = np.reciprocal(std, dtype=np.float32)  # 取倒数
     return (image.astype(np.float32) - mean) * denominator
 
 
-def denormalize(image, mean, std, scale=1.0):
-    if image.ndim == 2:
-        mean = mean.mean()
-        std = std.mean()
-
-    return (image.astype(np.float32) * std + mean) * scale
+# def denormalize(image, mean, std, scale=1.0):
+#     if image.ndim == 2:
+#         mean = mean.mean()
+#         std = std.mean()
+#     if image.max() < 1:
+#         image = image * 255
+#     if mean.max() < 1 and std.max() < 1:
+#         mean = mean * 255
+#         std = std * 255
+#     return (image.astype(np.float32) * std + mean).astype(np.uint8)
