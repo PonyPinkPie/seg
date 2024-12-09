@@ -30,10 +30,13 @@ class DPST(Dataset):
         self.label_set = set()
         self.data_info = []
         self.load_data_paths()
+        self.length = len(self.data_info)
 
+    def __len__(self):
+        return self.length
 
     def load_data_paths(self):
-        self.logger(f"Loaded {self.mode} Dataset")
+        self.logger.info(f"Loaded {self.mode} Dataset")
         data_dir = opj(self.root, self.mode)
         image_names = sorted([i for i in os.listdir(data_dir) if i.split('.')[-1].upper() in IMAGE_POSTFIX])
         for name in image_names:
@@ -51,7 +54,7 @@ class DPST(Dataset):
             }
             self.data_info.append(data_info)
 
-        self.logger(f"Loaded {self.mode} Dataset {len(self.data_info)} images, label class: {len(self.label_set)}")
+        self.logger.info(f"Loaded {self.mode} Dataset {len(self.data_info)} images, label class: {len(self.label_set)}")
 
     def get_class_label_dict(self):
         return {name: i+1 for i, name in enumerate(self.shape_labels)}  # background = 0
@@ -79,7 +82,7 @@ class DPST(Dataset):
 
     def parse_json_info(self, json_info):
         label_set = set()
-        for shape in json_info["shapes"]:
+        for k, shape in json_info["shapes"].items():
             label = shape.get("label", None)
             if label is None: continue
             label_set.add(label)
@@ -140,7 +143,7 @@ if __name__ == '__main__':
         # ]
         'logger': logger
     }
-    train_dataset = DpstDataset(**cfg)
+    train_dataset = DPST(**cfg)
     for data in train_dataset:
         image, mask = data['image'], data['mask']
 

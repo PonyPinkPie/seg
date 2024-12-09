@@ -29,7 +29,7 @@ class BaseRunner(object):
         self.ues_gpu = cuda_is_available()
 
         if self.distribute and self.ues_gpu:
-            init_dist_pytorch(**cfg.dist_params)
+            init_dist_pytorch(**cfg['dist_params'])
 
         self.rank, self.world_size = get_dist_info()
 

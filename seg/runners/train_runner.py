@@ -23,15 +23,16 @@ class TrainRunner(InferenceRunner):
 
     def _build_dataloader(self, cfg):
         transform = self._build_transform(cfg['transform'])
-        dataset = build_dataset(cfg['dataset'], dict(transform=transform))
+        dataset = build_dataset(cfg['dataset'], dict(transform=transform, logger=self.logger))
         shuffle = cfg['dataloader'].get('shuffle', False)
         dataloader = build_dataloader(
-            self.distribute, self.gpu_num, cfg['dataloader'], dict(dataset=dataset, shuffle=shuffle)
+            cfg['dataloader'], self.gpu_num, self.distribute, dict(dataset=dataset, shuffle=shuffle)
         )
         return dataloader
 
     def _build_optimizer(self, cfg):
-        return build_optimizer(cfg, dict(self.model.parameters()))
+        return build_optimizer(cfg, dict(params=self.model.parameters()))
+        # return build_optimizer(cfg, dict(params=[{'params':self.model.parameters(), 'lr':0.01}]))
 
     def _build_lr_scheduler(self, cfg):
         return build_lr_scheduler(cfg, dict(optimizer=self.optimizer))
@@ -61,15 +62,13 @@ class TrainRunner(InferenceRunner):
 
     def _train(self):
         self.model.train()
-        self.logger.info('Epoch {}, start training'.format(self.epoch + 1))
+        self.logger.info(f'Epoch {self.epoch + 1}, start training Lr: {self.lr[0]:.6f}')
 
-
-
-
+        self.lr_scheduler.step()
         pass
 
     def _valid(self):
-
+        self.model.eval()
         pass
 
     def __call__(self, *args, **kwargs):

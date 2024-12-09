@@ -18,7 +18,6 @@ class EncoderDecoder(BaseSegmentor):
     def __init__(self,
                  backbone=None,
                  decoder_head=None,
-                 num_classes=None,
                  neck=None,
                  auxiliary_head=None,
                  pretrained=None,
