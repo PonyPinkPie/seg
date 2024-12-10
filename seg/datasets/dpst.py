@@ -40,8 +40,8 @@ class DPST(Dataset):
         data_dir = opj(self.root, self.mode)
         image_names = sorted([i for i in os.listdir(data_dir) if i.split('.')[-1].upper() in IMAGE_POSTFIX])
         for name in image_names:
-            ip =  opj(data_dir, name)
-            jp = opj(data_dir, name.split('.')[0]+'.dpst')
+            ip = opj(data_dir, name)
+            jp = opj(data_dir, name.split('.')[0] + '.dpst')
             json_info = load_json(jp)
             label_set = self.parse_json_info(json_info)
             for label in label_set:
@@ -57,7 +57,7 @@ class DPST(Dataset):
         self.logger.info(f"Loaded {self.mode} Dataset {len(self.data_info)} images, label class: {len(self.label_set)}")
 
     def get_class_label_dict(self):
-        return {name: i+1 for i, name in enumerate(self.shape_labels)}  # background = 0
+        return {name: i + 1 for i, name in enumerate(self.shape_labels)}  # background = 0
 
     def get_label_class_dict(self):
         return {cls: label for label, cls in self._class_label_dict.items()}
@@ -90,14 +90,14 @@ class DPST(Dataset):
             return ['background']
         return list(label_set)
 
+    # def prepare_data(self, data_info):
+    #     return data_info.pop('image'), data_info.pop('mask')
 
     def __getitem__(self, item):
         data_info = self.prepare_one_data(item)
         if self.transform:
             data_info = self.transform(**data_info)
         return data_info
-
-
 
 
 if __name__ == '__main__':
@@ -113,15 +113,15 @@ if __name__ == '__main__':
         'root': '/data/wuxiaobin/datasets/Seg/Wire',
         'mode': 'train',
         'shape_labels': [
-              "AFM",
-              "AOC",
-              "AOG",
-              "EXC",
-              "EXN",
-              "EXN_rough",
-              "OX",
-              "SCT",
-              "posun"
+            "AFM",
+            "AOC",
+            "AOG",
+            "EXC",
+            "EXN",
+            "EXN_rough",
+            "OX",
+            "SCT",
+            "posun"
         ],
         # 'transforms':[
         #     {
@@ -146,4 +146,3 @@ if __name__ == '__main__':
     train_dataset = DPST(**cfg)
     for data in train_dataset:
         image, mask = data['image'], data['mask']
-

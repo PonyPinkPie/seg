@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 from seg.losses.registry import LOSSES
 
-
 def dilate(seg, tol):
     # seg: (B, C, H, W)
 
@@ -39,24 +38,23 @@ def map_to_one_hot(x, num_class):
 @LOSSES.register_module()
 class AutoSegLoss(nn.Module):
     def __init__(self,
-                 num_classes=10,
-                 theta=None,
+                 theta,
                  parameterization=None,
-                 target_metric='mIoU',
+                 target_metric='BIoU',
                  drop_bg=False,
                  tol=5,
                  inplace=True,
                  eps=1e-8,
-                 loss_weight=1.0):
+                 loss_weight=1.0,
+                 loss_name='loss_auto'):
         super(AutoSegLoss, self).__init__()
 
-        self.num_class = int(num_classes)
         self.inplace = inplace
+        self.loss_name = loss_name
 
         if isinstance(theta, torch.Tensor):
             self.theta = theta.detach().clone()
         else:
-            # self.theta = torch.tensor(theta, dtype=torch.float, device=torch.cuda.current_device())
             self.theta = torch.tensor(theta, dtype=torch.float)
 
         allowed_parameterization = ['bezier', 'linear']
@@ -159,11 +157,12 @@ class AutoSegLoss(nn.Module):
                 label,
                 **kwargs):
 
-        target = label.where((label >= 0) & (label < self.num_class),
-                             torch.tensor([self.num_class], dtype=label.dtype, device=label.device))
-        mask = (target >= 0) & (target < self.num_class)
+        _, num_class, _, _ = cls_score.shape
+        target = label.where((label >= 0) & (label < num_class),
+                             torch.tensor([num_class], dtype=label.dtype, device=label.device))
+        mask = (target >= 0) & (target < num_class)
 
-        target_onehot = map_to_one_hot(target, self.num_class).float()
+        target_onehot = map_to_one_hot(target, num_class).float()
         pred = self.input_softmax(cls_score)
 
         theta_device = self.theta.to(cls_score.device)

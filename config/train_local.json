@@ -39,7 +39,7 @@
         "type": "DLAHead",
         "in_channels": [32, 64, 128, 256],
         "down_ratio": 2,
-        "num_classes": 11,
+        "num_classes": 10,
         "align_corners": false,
         "norm_cfg": {"type": "BN"},
         "act_cfg": {"type": "xUnitS"},
@@ -124,9 +124,9 @@
   "data": {
     "train": {
       "transform": [
-          {"type": "Resize", "width": 512, "height": 512},
-          {"type": "Normalize"},
-          {"type": "ToTensor"}
+          {"type": "Resize", "width": 512, "height": 512, "always_apply": true},
+          {"type": "Normalize", "always_apply": true, "scale": 1.0},
+          {"type": "ToTensor", "always_apply": true}
       ],
       "dataset": {
         "type": "DPST",
@@ -156,9 +156,9 @@
     },
     "valid": {
       "transform": [
-          {"type": "Resize", "width": 512, "height": 512},
-          {"type": "Normalize"},
-          {"type": "ToTensor"}
+          {"type": "Resize", "width": 512, "height": 512, "always_apply": true},
+          {"type": "Normalize", "always_apply": true, "scale": 1.0},
+          {"type": "ToTensor", "always_apply": true}
         ],
       "dataset": {
         "type": "DPST",

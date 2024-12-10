@@ -336,12 +336,11 @@ def normalize(image, mean, std, scale=1.0):
     if image.ndim == 2:
         mean = mean.mean()
         std = std.mean()
-    if image.max() > 1 and mean.max() < 1:
-        mean = mean * 255
-        std = std * 255
-    elif image.max() < 1 and mean.max() > 1:
-        mean = mean / 255
-        std = std / 255
+    if image.max() > 1:
+        image = image.astype(np.float32) / 255
+    if mean.max() > 1 and std.max() > 1:
+        mean = mean.astype(np.float32) / 255
+        std = std.astype(np.float32) / 255
     denominator = np.reciprocal(std, dtype=np.float32)  # 取倒数
     return (image.astype(np.float32) - mean) * denominator
 

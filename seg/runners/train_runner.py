@@ -1,3 +1,5 @@
+import time
+
 from .inference_runner import InferenceRunner
 
 from seg.dataloaders import build_dataloader
@@ -6,6 +8,8 @@ from seg.optimizers import build_optimizer
 from seg.lr_schedulers import build_lr_scheduler
 from collections.abc import Iterable
 import numpy as np
+from seg.utils.gpu import get_gpu_memroy
+import datetime
 
 
 class TrainRunner(InferenceRunner):
@@ -18,8 +22,11 @@ class TrainRunner(InferenceRunner):
         self.optimizer = self._build_optimizer(train_cfg['optimizer'])
         self.lr_scheduler = self._build_lr_scheduler(train_cfg['lr_scheduler'])
         self.max_epochs = train_cfg['max_epochs']
-        self.log_interval = train_cfg.get('log_interval', 10)
+        self.iters = len(self.train_dataloader)
+        self.log_interval = train_cfg.get('log_interval', self.iters//10)
         self.train_valid_interval = train_cfg.get('train_valid_interval', 1)
+
+
 
     def _build_dataloader(self, cfg):
         transform = self._build_transform(cfg['transform'])
@@ -60,9 +67,30 @@ class TrainRunner(InferenceRunner):
             else:
                 param['lr'] = val
 
+    def echo_info(self):
+        iter_info = f"{self.iter}/{self.iters}".ljust(8)
+        time_info = f"{(self.used_time*self.log_interval):.2f} sec".ljust(10)
+        loss_info = f"{self.losses['loss']:.4f}".ljust(10)
+        lr_info = f"{self.lr[0]:.6f}".ljust(10)
+        gpu_info = f"{(float(get_gpu_memroy([self.image.device.index])[0]['memory_used'])/1024):.2f} GB".ljust(8)
+        self.logger.info(f"Step:{iter_info} Time:{time_info} Loss:{loss_info} Lr:{lr_info} GPU:{gpu_info}")
+
     def _train(self):
+        self.iter = 0
         self.model.train()
-        self.logger.info(f'Epoch {self.epoch + 1}, start training Lr: {self.lr[0]:.6f}')
+        self.logger.info(f'Epoch {self.epoch + 1}/{self.max_epochs}')
+        for batch_idx, batch_data in enumerate(self.train_dataloader):
+            t1 = time.time()
+            self.optimizer.zero_grad()
+            self.image = batch_data['image'].cuda()
+            self.mask = batch_data['mask'].cuda()
+            self.losses = self.model(self.image, return_metrics=True, ground_truth=self.mask)
+            self.losses['loss'].backward()
+            self.optimizer.step()
+            self.iter += 1
+            self.used_time = time.time() - t1
+            if batch_idx % self.log_interval == 0 and batch_idx // self.log_interval > 0:
+                self.echo_info()
 
         self.lr_scheduler.step()
         pass
@@ -75,8 +103,12 @@ class TrainRunner(InferenceRunner):
         for _ in range(self.epoch, self.max_epochs):
             if hasattr(self.train_dataloader.sampler, 'set_epoch'):
                 self.train_dataloader.sampler.set_epoch(self.epoch)
-
+            t1 = time.time()
             self._train()
 
             if self.epoch % self.train_valid_interval == 0:
                 self._valid()
+            train_valid_time = time.time() - t1
+
+            eta_string = str(datetime.timedelta(seconds=int(train_valid_time * (self.max_epochs-self.epoch))))
+            self.logger.info(f"ETA:{eta_string}")

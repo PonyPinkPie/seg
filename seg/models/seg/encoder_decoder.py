@@ -145,9 +145,10 @@ class EncoderDecoder(BaseSegmentor):
         feat = self.extract_feat(inputs)
 
         losses = dict()
-        gt_masks = ground_truth['mask'].to(inputs.device, dtype=inputs.dtype)
-        weight = ground_truth['weight'].to(inputs.device, dtype=inputs.dtype) if "weight" in ground_truth else None
-        loss_decode = self._decode_head_forward_train(feat, gt_masks, weight=weight, **kwargs)
+        gt_masks = ground_truth
+        # gt_masks = ground_truth['mask'].to(inputs.device, dtype=inputs.dtype)
+        # weight = ground_truth['weight'].to(inputs.device, dtype=inputs.dtype) if "weight" in ground_truth else None
+        loss_decode = self._decode_head_forward_train(feat, gt_masks, weight=None, **kwargs)
         losses.update(loss_decode)
 
         if self.with_auxiliary_head:

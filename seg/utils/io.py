@@ -52,14 +52,17 @@ def annotation2mask(annotation: dict, class2label_dict: dict, min_pixel=2):
     min_pixel:
     """
     shapes = annotation["shapes"]
-    shapes = sorted(shapes, key=lambda x: x['label'])
-    width, height = annotation["width"], annotation["height"]
+    # shapes = sorted(shapes, key=lambda x: x['label'])
+    width, height = int(annotation["width"]), int(annotation["height"])
     mask = np.zeros((height, width), dtype=np.uint8)
-    for shape in shapes:
+    for k, shape in shapes.items():
         if not isinstance(shape, dict):
             raise TypeError("annotation must be a dict, bug got {}".format(type(shape)))
 
-        points = np.int0(shape["points"])
+        tmp_points = np.int0((shape["points"]))
+        points = np.zeros((len(tmp_points)//2, 2), dtype=np.int32)
+        points[:, 0] = tmp_points[0::2]
+        points[:, 1] = tmp_points[1::2]
         if len(points) <=2: continue
         if cv2.contourArea(points) < min_pixel: continue  # 若小于最低像素，则不进行显示
         index = class2label_dict.get(shape["label"], None)

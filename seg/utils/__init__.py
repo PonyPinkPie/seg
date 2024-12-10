@@ -6,3 +6,4 @@ from .weight_init import *
 from .io import *
 from .distribute import *
 from .config import *
+from .gpu import *

@@ -22,18 +22,18 @@ class InferenceRunner(BaseRunner):
     def _build_model(self, cfg):
         self.logger.info(f"Building model.")
         self.model = build_segmentation(cfg)
-        if cuda_is_available():
-            if self.distribute:
-                self.model = torch.nn.parallel.DistributedDataParallel(
-                    self.model.cuda(),
-                    device_ids=[torch.cuda.current_device()],
-                    broadcast_buffers=True,
-                )
-                self.logger.info('Using DistributedDataParallel Training.')
-            else:
-                if devices_count() > 1:
-                    self.model = torch.nn.DataParallel(self.model)
-                    self.logger.info('Using DataParallel Training.')
+        # if cuda_is_available():
+        #     if self.distribute:
+        #         self.model = torch.nn.parallel.DistributedDataParallel(
+        #             self.model.cuda(),
+        #             device_ids=[torch.cuda.current_device()],
+        #             broadcast_buffers=True,
+        #         )
+        #         self.logger.info('Using DistributedDataParallel Training.')
+        #     else:
+        #         if devices_count() > 1:
+        #             self.model = torch.nn.DataParallel(self.model)
+        #             self.logger.info('Using DataParallel Training.')
         self.model.cuda()
         self.logger.info(f"Building model Done.")
 
