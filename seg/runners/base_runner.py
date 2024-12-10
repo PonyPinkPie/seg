@@ -31,8 +31,6 @@ class BaseRunner(object):
         if self.distribute and self.ues_gpu:
             init_dist_pytorch(**cfg['dist_params'])
 
-        self.rank, self.world_size = get_dist_info()
-
         self._set_cudnn(
             cfg.get('cudnn_deterministic', False),
             cfg.get('cudnn_benchmark', False)

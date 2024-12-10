@@ -8,11 +8,11 @@ def cuda_is_available():
 def devices_count():
     return torch.cuda.device_count()
 
-def init_dist_pytorch(backend='nccl', **kwargs):
-    rank = int(os.environ['RANK'])
-    num_gpus = torch.cuda.device_count()
-    torch.cuda.set_device(rank % num_gpus)
-    dist.init_process_group(backend=backend, **kwargs)
+def init_dist_pytorch(**kwargs):
+    # rank = kwargs.get('rank', 0)
+    # num_gpus = torch.cuda.device_count()
+    # torch.cuda.set_device(rank % num_gpus)
+    dist.init_process_group(**kwargs)
 
 
 def get_dist_info():

@@ -2,7 +2,7 @@
   "common": {
     "workdir": "/workspace/mycode/03-seg/seg/workdir/test",
     "distribute": false,
-    "dist_params": {"backend": "nccl"},
+    "dist_params": {"backend": "nccl", "world_size": 1, "rank": 0, "init_method": "tcp://127.0.0.1:32780"},
     "logger_cfg": {
       "handlers": [
         {
@@ -39,7 +39,7 @@
         "type": "DLAHead",
         "in_channels": [32, 64, 128, 256],
         "down_ratio": 2,
-        "num_classes": 10,
+        "num_classes": 11,
         "align_corners": false,
         "norm_cfg": {"type": "BN"},
         "act_cfg": {"type": "xUnitS"},

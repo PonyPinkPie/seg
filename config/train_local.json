@@ -39,7 +39,7 @@
         "type": "DLAHead",
         "in_channels": [32, 64, 128, 256],
         "down_ratio": 2,
-        "num_classes": 10,
+        "num_classes": 11,
         "align_corners": false,
         "norm_cfg": {"type": "BN"},
         "act_cfg": {"type": "xUnitS"},
@@ -147,8 +147,8 @@
       },
       "dataloader": {
         "type": "DataLoader",
-        "samples_per_gpu": 8,
-        "workers_per_gpu": 4,
+        "samples_per_gpu": 16,
+        "workers_per_gpu": 16,
         "shuffle": true,
         "drop_last": true,
         "pin_memory": true

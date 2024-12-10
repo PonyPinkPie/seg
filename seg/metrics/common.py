@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+epsilon = 1e-6
 
 
 def get_contour_points_from_mask(mask, sorted_by_area=False):
@@ -111,19 +112,19 @@ def confuse_matrix_for_segmentation(
     return tp_list, fp_list, fn_list, tn_list, threshold_list
 
 
-def get_pr_pont(tp_list, fp_list, fn_list):
-    precision_list = tp_list / (tp_list + fp_list + 1e-6)
-    recall_list = tp_list / (tp_list + fn_list + 1e-6)
+def get_pr_point(tp_list, fp_list, fn_list):
+    precision_list = tp_list / (tp_list + fp_list + epsilon)
+    recall_list = tp_list / (tp_list + fn_list + epsilon)
     return precision_list, recall_list
 
 
 def get_seg_det_roc_point(tp_list, fp_list, fn_list, num_gt):
-    tpr_list = tp_list / (tp_list + fn_list + 1e-6)
+    tpr_list = tp_list / (tp_list + fn_list + epsilon)
     return tpr_list, fp_list / max(num_gt, 1)
 
 
 def get_f1_point(precision_list, recall_list):
-    return [2 * p * r / (p + r + 1e-6) for p, r in zip(precision_list, recall_list)]
+    return [2 * p * r / (p + r + epsilon) for p, r in zip(precision_list, recall_list)]
 
 
 def area_under_curve(x, y):
@@ -136,6 +137,11 @@ def area_under_curve(x, y):
         last_idx = i
     return area
 
+def calculate_iou(y_pred, y_true):
+    intersection = np.sum(np.bitwise_and(y_pred, y_true))
+    union = np.sum(np.bitwise_or(y_pred, y_true)) - intersection
+    iou = intersection / (union + epsilon)
+    return np.round(iou, 4)
 
 def calculate_auc(tpr_list, fpr_list):
     tpr = np.append(np.insert(tpr_list, 0, 1.0), 0.0)
@@ -152,9 +158,40 @@ def calculate_aupr(precision_list, recall_list):
     return np.round(aupr, 4)
 
 
+def calculate_metric_for_more(prob, pred, mask):
+    tp_list, fp_list, fn_list, tn_list, threshold_list = confuse_matrix_for_segmentation(prob, mask)
+    precision_list, recall_list = get_pr_point(tp_list, fp_list, fn_list)
+    tpr, fpr = get_seg_det_roc_point(tp_list, fp_list, fn_list, len(get_contour_points_from_mask(mask)))
+    f1_list = get_f1_point(precision_list, recall_list)
+    auc = calculate_auc(tpr, fpr)
+    aupr = calculate_aupr(precision_list, recall_list)
+    iou = calculate_iou(pred, mask)
+    prf1 = np.stack([precision_list, recall_list, f1_list, ], axis=0)
+    iou_auc_aupr = [iou, auc ,aupr]
+    tp_fp_fn = np.stack([tp_list, fp_list, fn_list], axis=0)
+    return [tp_fp_fn, prf1, iou_auc_aupr], threshold_list
+
+def calculate_intersection_and_union(y_pred, y_true):
+    intersection = np.sum(np.bitwise_and(y_pred, y_true))
+    union = np.sum(np.bitwise_or(y_pred, y_true)) - intersection
+    return intersection, union
+
+def calculate_metric_for_one(prob, mask):
+    tp_list, fp_list, fn_list, tn_list, threshold_list = confuse_matrix_for_segmentation(prob, mask)
+    precision_list, recall_list = get_pr_point(tp_list, fp_list, fn_list)
+    tpr, fpr = get_seg_det_roc_point(tp_list, fp_list, fn_list, len(get_contour_points_from_mask(mask)))
+    f1_list = get_f1_point(precision_list, recall_list)
+    auc = calculate_auc(tpr, fpr)
+    aupr = calculate_aupr(precision_list, recall_list)
+    iou = [calculate_intersection_and_union(prob > t, mask) for t in threshold_list]
+    iou = list(zip(*iou))
+    iou_auc_aupr = [iou, auc, aupr]
+    prf1 = np.stack([precision_list, recall_list, f1_list], axis=0)
+    tp_fp_fn = np.stack([tp_list, fp_list, fn_list], axis=0)
+    return [tp_fp_fn, prf1, iou_auc_aupr], threshold_list
 
 # def get_cls_roc_point(tp_list, fp_list, fn_list, tn_list):
-#     tpr_list = tp_list / (tp_list + fn_list + 1e-6)
-#     fpr_list = tp_list / (fp_list + tn_list + 1e-6)
+#     tpr_list = tp_list / (tp_list + fn_list + epsilon)
+#     fpr_list = tp_list / (fp_list + tn_list + epsilon)
 #     return tpr_list, fpr_list
 #

@@ -1,5 +1,7 @@
 import time
 
+import torch
+
 from .inference_runner import InferenceRunner
 
 from seg.dataloaders import build_dataloader
@@ -10,6 +12,7 @@ from collections.abc import Iterable
 import numpy as np
 from seg.utils.gpu import get_gpu_memroy
 import datetime
+from seg.metrics.common import calculate_metric_for_more, calculate_metric_for_one
 
 
 class TrainRunner(InferenceRunner):
@@ -17,7 +20,12 @@ class TrainRunner(InferenceRunner):
         super().__init__(inference_cfg, base_cfg)
 
         self.train_dataloader = self._build_dataloader(train_cfg['train'])
+
         self.valid_dataloader = self._build_dataloader(train_cfg['valid'])
+        self.shape_labels = self.valid_dataloader.dataset.shape_labels
+        self.class2label = self.valid_dataloader.dataset.class2label
+        self.label2class = self.valid_dataloader.dataset.label2class
+
 
         self.optimizer = self._build_optimizer(train_cfg['optimizer'])
         self.lr_scheduler = self._build_lr_scheduler(train_cfg['lr_scheduler'])
@@ -96,10 +104,51 @@ class TrainRunner(InferenceRunner):
         pass
 
     def _valid(self):
+        self.logger.info(f"Start Valid")
         self.model.eval()
+
+        all_seg_metrics_dict = dict()
+        for i in range(len(self.label2class)):
+            all_seg_metrics_dict[self.label2class[i]] = []
+
+        with torch.no_grad():
+            for idx, batch_data in enumerate(self.valid_dataloader):
+                self.image = batch_data['image'].cuda()
+                self.mask = batch_data['mask'].numpy().astype(np.uint8)
+                probs = self.model(self.image).cpu().numpy()
+                if len(self.class2label) > 0:
+                    # 多分类评估
+                    y_probs = np.transpose(probs, (0, 2, 3, 1))  # [B C H W] -> [B H W C]
+                    y_preds = np.argmax(y_probs, axis=-1)
+                    y_true = self.mask
+                    for class_idx in self.class2label.values():
+                        metrics = []
+                        for y_pred, y_prob, label in zip(y_preds, y_probs, y_true):
+                            mask = (label == class_idx).astype(np.uint8)
+                            if mask.sum() == 0:
+                                # GT 不存在， 计算召回是都为0，因此不参与计算
+                                continue
+                            prob = y_prob[..., class_idx]
+                            pred = (y_pred == mask).astype(np.uint8)
+                            metric, threshold_list = calculate_metric_for_more(prob, pred, mask)
+                            metrics.append(metric)
+                        all_seg_metrics_dict[self.label2class[class_idx]] += metrics
+                else:
+                    if 'background' not in all_seg_metrics_dict:
+                        all_seg_metrics_dict['background'] = []
+
+                    y_probs = probs
+                    y_trues = self.mask
+                    for y_prob, y_true in zip(y_probs, y_trues):
+                        metric, threshold_list = calculate_metric_for_one(y_prob, y_true)
+                        metrics.append(metric)
+                        all_seg_metrics_dict["foreground"] += [metric]
         pass
 
     def __call__(self, *args, **kwargs):
+
+        self._valid()
+
         for _ in range(self.epoch, self.max_epochs):
             if hasattr(self.train_dataloader.sampler, 'set_epoch'):
                 self.train_dataloader.sampler.set_epoch(self.epoch)
