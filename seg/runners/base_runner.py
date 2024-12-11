@@ -32,7 +32,7 @@ class BaseRunner(object):
             init_dist_pytorch(**cfg['dist_params'])
 
         self._set_cudnn(
-            cfg.get('cudnn_deterministic', False),
+            cfg.get('cudnn_deterministic', True),
             cfg.get('cudnn_benchmark', False)
         )
 

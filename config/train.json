@@ -15,7 +15,7 @@
         }
       ]
     },
-    "cudnn_deterministic": false,
+    "cudnn_deterministic": true,
     "cudnn_benchmark": false,
     "seed": 0,
     "metrics": {}

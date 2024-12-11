@@ -107,7 +107,7 @@ def confuse_matrix_for_segmentation(
                 match_gt[gt_idx] = True
                 match_pred[pred_idx] = True
             tp_list[thres_idx] = sum(match_gt)
-            fp_list[thres_idx] = len(match_pred) - sum(match_gt)
+            fp_list[thres_idx] = max(0, len(match_pred) - sum(match_gt))
             fn_list[thres_idx] = len(match_gt) - sum(match_gt)
     return tp_list, fp_list, fn_list, threshold_list
 
