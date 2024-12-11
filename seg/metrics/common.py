@@ -1,5 +1,7 @@
 import numpy as np
 import cv2
+from prettytable import PrettyTable
+
 epsilon = 1e-6
 
 
@@ -86,7 +88,6 @@ def confuse_matrix_for_segmentation(
     tp_list = np.zeros((num_thres), dtype=np.int32)
     fp_list = np.zeros((num_thres), dtype=np.int32)
     fn_list = np.zeros((num_thres), dtype=np.int32)
-    tn_list = np.zeros((num_thres), dtype=np.int32)
     for thres_idx, threshold in enumerate(list(threshold_list)):
         pred_label = np.array(predict_prob >= threshold, dtype=np.uint8) * 255
 
@@ -108,8 +109,7 @@ def confuse_matrix_for_segmentation(
             tp_list[thres_idx] = sum(match_gt)
             fp_list[thres_idx] = len(match_pred) - sum(match_gt)
             fn_list[thres_idx] = len(match_gt) - sum(match_gt)
-            tn_list = 0
-    return tp_list, fp_list, fn_list, tn_list, threshold_list
+    return tp_list, fp_list, fn_list, threshold_list
 
 
 def get_pr_point(tp_list, fp_list, fn_list):
@@ -137,11 +137,13 @@ def area_under_curve(x, y):
         last_idx = i
     return area
 
+
 def calculate_iou(y_pred, y_true):
     intersection = np.sum(np.bitwise_and(y_pred, y_true))
-    union = np.sum(np.bitwise_or(y_pred, y_true)) - intersection
+    union = np.sum(np.bitwise_or(y_pred, y_true))
     iou = intersection / (union + epsilon)
     return np.round(iou, 4)
+
 
 def calculate_auc(tpr_list, fpr_list):
     tpr = np.append(np.insert(tpr_list, 0, 1.0), 0.0)
@@ -159,25 +161,27 @@ def calculate_aupr(precision_list, recall_list):
 
 
 def calculate_metric_for_more(prob, pred, mask):
-    tp_list, fp_list, fn_list, tn_list, threshold_list = confuse_matrix_for_segmentation(prob, mask)
+    tp_list, fp_list, fn_list, threshold_list = confuse_matrix_for_segmentation(prob, mask)
     precision_list, recall_list = get_pr_point(tp_list, fp_list, fn_list)
     tpr, fpr = get_seg_det_roc_point(tp_list, fp_list, fn_list, len(get_contour_points_from_mask(mask)))
     f1_list = get_f1_point(precision_list, recall_list)
     auc = calculate_auc(tpr, fpr)
     aupr = calculate_aupr(precision_list, recall_list)
     iou = calculate_iou(pred, mask)
-    prf1 = np.stack([precision_list, recall_list, f1_list, ], axis=0)
-    iou_auc_aupr = [iou, auc ,aupr]
+    prf1 = np.stack([precision_list, recall_list, f1_list], axis=0)
+    iou_auc_aupr = [iou, auc, aupr]
     tp_fp_fn = np.stack([tp_list, fp_list, fn_list], axis=0)
     return [tp_fp_fn, prf1, iou_auc_aupr], threshold_list
+
 
 def calculate_intersection_and_union(y_pred, y_true):
     intersection = np.sum(np.bitwise_and(y_pred, y_true))
     union = np.sum(np.bitwise_or(y_pred, y_true)) - intersection
     return intersection, union
 
+
 def calculate_metric_for_one(prob, mask):
-    tp_list, fp_list, fn_list, tn_list, threshold_list = confuse_matrix_for_segmentation(prob, mask)
+    tp_list, fp_list, fn_list, threshold_list = confuse_matrix_for_segmentation(prob, mask)
     precision_list, recall_list = get_pr_point(tp_list, fp_list, fn_list)
     tpr, fpr = get_seg_det_roc_point(tp_list, fp_list, fn_list, len(get_contour_points_from_mask(mask)))
     f1_list = get_f1_point(precision_list, recall_list)
@@ -190,8 +194,51 @@ def calculate_metric_for_one(prob, mask):
     tp_fp_fn = np.stack([tp_list, fp_list, fn_list], axis=0)
     return [tp_fp_fn, prf1, iou_auc_aupr], threshold_list
 
-# def get_cls_roc_point(tp_list, fp_list, fn_list, tn_list):
-#     tpr_list = tp_list / (tp_list + fn_list + epsilon)
-#     fpr_list = tp_list / (fp_list + tn_list + epsilon)
-#     return tpr_list, fpr_list
-#
+
+def parse_seg_metrics(all_metrics):
+    all_tp_fp_fn_dict = dict()
+    all_prf1_dict = dict()
+    all_iou_auc_aupro_dict = dict()
+    for class_name in all_metrics:
+        all_tp_fp_fn_dict[class_name] = [m[0] for m in all_metrics[class_name]]
+        all_prf1_dict[class_name] = [m[1] for m in all_metrics[class_name]]
+        all_iou_auc_aupro_dict[class_name] = [m[2] for m in all_metrics[class_name]]
+
+    all_tp_fp_fn = list(all_tp_fp_fn_dict.values())
+    all_prf1 = list(all_prf1_dict.values())
+    all_iou_auc_aupro = list(all_iou_auc_aupro_dict.values())
+
+    categories_sum_tp_fp_fn = [np.array(a).sum(axis=0) for a in all_tp_fp_fn]
+    categories_avg_prf1 = [np.array(a).mean(axis=0) for a in all_prf1]
+    categories_avg_iou_aoc_aupr = [np.array(a).mean(axis=0) for a in all_iou_auc_aupro]
+
+    avg_all_prf1 = np.array(categories_avg_prf1).mean(axis=0, keepdims=True)
+    best_index = avg_all_prf1[..., -1, :].argmax()  # F1最佳阈值
+    curr_avg_all_prf1 = avg_all_prf1[..., best_index]
+
+    curr_best_categories_tp_fp_fn = [a[..., best_index] for a in categories_sum_tp_fp_fn]
+    curr_best_categories_prf1 = [a[..., best_index] for a in categories_avg_prf1]
+
+    curr_best_categories_metric = np.concatenate(
+        [curr_best_categories_tp_fp_fn, curr_best_categories_prf1, categories_avg_iou_aoc_aupr], axis=1)
+
+    curr_sum_all_tp_fp_fn = np.array(curr_best_categories_tp_fp_fn).sum(axis=0, keepdims=True)
+    curr_avg_all_iou_aoc_aupr = np.array(categories_avg_iou_aoc_aupr).mean(axis=0, keepdims=True)
+
+    curr_avg_all_metric = np.concatenate([curr_sum_all_tp_fp_fn, curr_avg_all_prf1, curr_avg_all_iou_aoc_aupr], axis=1)
+
+    curr_metrics = np.concatenate([curr_best_categories_metric, curr_avg_all_metric], axis=0).round(4)
+    return curr_metrics, best_index
+
+
+def parse_seg_metrics_to_table(curr_metrics, best_metrics, label2class, logger):
+    table = PrettyTable()
+    table.field_names = ["", "TP", "FP", "FN", "Precision", "Recall", "F1", "iou", "AUC", "AUPR"]
+    for i, metrics in enumerate(curr_metrics[:-1]):
+        table.add_row([label2class[i]] + metrics[:3].astype(np.int32).tolist() + metrics[3:].tolist())
+    table.add_row(["curr_metrics"] + curr_metrics[-1][:3].astype(np.int32).tolist() + curr_metrics[-1][3:].tolist())
+    table.add_row(["best_metrics"] + best_metrics[:3].astype(np.int32).tolist() + best_metrics[3:].tolist())
+
+    msgs = table.__str__().split('\n')
+    for msg in msgs:
+        logger.info(msg)

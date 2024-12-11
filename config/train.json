@@ -147,8 +147,8 @@
       },
       "dataloader": {
         "type": "DataLoader",
-        "samples_per_gpu": 8,
-        "workers_per_gpu": 4,
+        "samples_per_gpu": 16,
+        "workers_per_gpu": 16,
         "shuffle": true,
         "drop_last": true,
         "pin_memory": true
@@ -179,8 +179,8 @@
       },
       "dataloader": {
         "type": "DataLoader",
-        "samples_per_gpu": 8,
-        "workers_per_gpu": 4,
+        "samples_per_gpu": 16,
+        "workers_per_gpu": 16,
         "shuffle": false,
         "drop_last": false,
         "pin_memory": true

@@ -12,7 +12,7 @@ from collections.abc import Iterable
 import numpy as np
 from seg.utils.gpu import get_gpu_memroy
 import datetime
-from seg.metrics.common import calculate_metric_for_more, calculate_metric_for_one
+from seg.metrics.common import calculate_metric_for_more, calculate_metric_for_one, parse_seg_metrics, parse_seg_metrics_to_table
 
 
 class TrainRunner(InferenceRunner):
@@ -26,15 +26,14 @@ class TrainRunner(InferenceRunner):
         self.class2label = self.valid_dataloader.dataset.class2label
         self.label2class = self.valid_dataloader.dataset.label2class
 
-
         self.optimizer = self._build_optimizer(train_cfg['optimizer'])
         self.lr_scheduler = self._build_lr_scheduler(train_cfg['lr_scheduler'])
         self.max_epochs = train_cfg['max_epochs']
         self.iters = len(self.train_dataloader)
-        self.log_interval = train_cfg.get('log_interval', self.iters//10)
+        self.log_interval = train_cfg.get('log_interval', self.iters // 10)
         self.train_valid_interval = train_cfg.get('train_valid_interval', 1)
 
-
+        self.best_value = 0
 
     def _build_dataloader(self, cfg):
         transform = self._build_transform(cfg['transform'])
@@ -77,10 +76,10 @@ class TrainRunner(InferenceRunner):
 
     def echo_info(self):
         iter_info = f"{self.iter}/{self.iters}".ljust(8)
-        time_info = f"{(self.used_time*self.log_interval):.2f} sec".ljust(10)
+        time_info = f"{(self.used_time * self.log_interval):.2f} sec".ljust(10)
         loss_info = f"{self.losses['loss']:.4f}".ljust(10)
         lr_info = f"{self.lr[0]:.6f}".ljust(10)
-        gpu_info = f"{(float(get_gpu_memroy([self.image.device.index])[0]['memory_used'])/1024):.2f} GB".ljust(8)
+        gpu_info = f"{(float(get_gpu_memroy([self.image.device.index])[0]['memory_used']) / 1024):.2f} GB".ljust(8)
         self.logger.info(f"Step:{iter_info} Time:{time_info} Loss:{loss_info} Lr:{lr_info} GPU:{gpu_info}")
 
     def _train(self):
@@ -116,15 +115,15 @@ class TrainRunner(InferenceRunner):
                 self.image = batch_data['image'].cuda()
                 self.mask = batch_data['mask'].numpy().astype(np.uint8)
                 probs = self.model(self.image).cpu().numpy()
-                if len(self.class2label) > 0:
+                if len(self.class2label) > 1:
                     # 多分类评估
                     y_probs = np.transpose(probs, (0, 2, 3, 1))  # [B C H W] -> [B H W C]
                     y_preds = np.argmax(y_probs, axis=-1)
-                    y_true = self.mask
+                    y_trues = self.mask
                     for class_idx in self.class2label.values():
                         metrics = []
-                        for y_pred, y_prob, label in zip(y_preds, y_probs, y_true):
-                            mask = (label == class_idx).astype(np.uint8)
+                        for y_pred, y_prob, y_true in zip(y_preds, y_probs, y_trues):
+                            mask = (y_true == class_idx).astype(np.uint8)
                             if mask.sum() == 0:
                                 # GT 不存在， 计算召回是都为0，因此不参与计算
                                 continue
@@ -143,11 +142,21 @@ class TrainRunner(InferenceRunner):
                         metric, threshold_list = calculate_metric_for_one(y_prob, y_true)
                         metrics.append(metric)
                         all_seg_metrics_dict["foreground"] += [metric]
-        pass
+
+        curr_metrics, best_index = parse_seg_metrics(all_seg_metrics_dict)
+
+        curr_mean_f1 = curr_metrics[-1, 5]
+        curr_mean_iou = curr_metrics[-1, 6]
+        if self.best_value < curr_mean_f1:
+            self.best_value = curr_mean_f1
+            self.best_metrics = curr_metrics
+            threshold = threshold_list[best_index]
+
+        parse_seg_metrics_to_table(curr_metrics, self.best_metrics[-1, :], self.label2class, self.logger)
 
     def __call__(self, *args, **kwargs):
 
-        self._valid()
+        # self._valid()
 
         for _ in range(self.epoch, self.max_epochs):
             if hasattr(self.train_dataloader.sampler, 'set_epoch'):
@@ -159,5 +168,5 @@ class TrainRunner(InferenceRunner):
                 self._valid()
             train_valid_time = time.time() - t1
 
-            eta_string = str(datetime.timedelta(seconds=int(train_valid_time * (self.max_epochs-self.epoch))))
+            eta_string = str(datetime.timedelta(seconds=int(train_valid_time * (self.max_epochs - self.epoch))))
             self.logger.info(f"ETA:{eta_string}")

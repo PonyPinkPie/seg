@@ -1,5 +1,6 @@
 import argparse
 import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../'))
@@ -11,8 +12,8 @@ from seg.utils.config import file_to_config
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    # parser.add_argument('--cfg', type=str, default='/workspace/mycode/03-seg/seg/config/train.json')
-    parser.add_argument('--cfg', type=str, default='C:\mycode\mycode\seg\config\\train_local.json')
+    parser.add_argument('--cfg', type=str, default='/workspace/mycode/03-seg/seg/config/train.json')
+    # parser.add_argument('--cfg', type=str, default='C:\mycode\mycode\seg\config\\train_local.json')
     args = parser.parse_args()
     return args
 
