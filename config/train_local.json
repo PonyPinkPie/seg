@@ -1,6 +1,6 @@
 {
   "common": {
-    "workdir": "/workspace/mycode/03-seg/seg/workdir/test",
+    "workdir": "C:\\mycode\\mycode\\seg\\workdir\\test",
     "distribute": false,
     "dist_params": {"backend": "nccl"},
     "logger_cfg": {
@@ -23,12 +23,13 @@
   "inference": {
     "multi_label": false,
     "transform": [
-      {"type": "Resize", "always_apply": true, "width": 256, "height": 256, "padding": 0},
+      {"type": "Resize", "always_apply": true, "width": 512, "height": 512, "padding": 0},
       {"type": "Normalize", "always_apply": true, "scale": 1.0},
       {"type": "ToTensor", "always_apply": true}
     ],
     "model": {
       "type": "EncoderDecoder",
+      "pretrained": "C:\\mycode\\mycode\\seg\\local\\moganet_tiny_sz256_8xbs128_ep300.pth",
       "backbone": {
         "type": "MogaNet",
         "arch": "tiny",
@@ -124,7 +125,7 @@
   "data": {
     "train": {
       "transform": [
-          {"type": "Resize", "width": 256, "height": 256, "always_apply": true},
+          {"type": "Resize", "width": 512, "height": 512, "always_apply": true},
           {"type": "Normalize", "always_apply": true, "scale": 1.0},
           {"type": "ToTensor", "always_apply": true}
       ],
@@ -147,7 +148,7 @@
       },
       "dataloader": {
         "type": "DataLoader",
-        "samples_per_gpu": 32,
+        "samples_per_gpu": 16,
         "workers_per_gpu": 16,
         "shuffle": true,
         "drop_last": true,
@@ -156,7 +157,7 @@
     },
     "valid": {
       "transform": [
-          {"type": "Resize", "width": 256, "height": 256, "always_apply": true},
+          {"type": "Resize", "width": 512, "height": 512, "always_apply": true},
           {"type": "Normalize", "always_apply": true, "scale": 1.0},
           {"type": "ToTensor", "always_apply": true}
         ],
@@ -179,7 +180,7 @@
       },
       "dataloader": {
         "type": "DataLoader",
-        "samples_per_gpu": 32,
+        "samples_per_gpu": 16,
         "workers_per_gpu": 16,
         "shuffle": false,
         "drop_last": false,

@@ -38,7 +38,7 @@ class TrainRunner(InferenceRunner):
 
         self.best_value = 0
         self.best_pth_path = opj(self.workdir, self.timestamp+'.pth')
-        self.select_metric = train_cfg.get('select_metric').lower()
+        self.select_metric = train_cfg.get('select_metric', 'f1').lower()
         assert self.select_metric in ['f1', 'iou', 'b_f1_iou', 'b_p_r_iou'], \
             f"select_metric must be one of 'f1', 'iou', 'b_f1_iou', 'b_p_r_iou', but got {self.select_metric}"
 
@@ -92,7 +92,8 @@ class TrainRunner(InferenceRunner):
     def _train(self):
         self.iter = 0
         self.model.train()
-        self.logger.info(f'Epoch {self.epoch + 1}/{self.max_epochs}')
+        line = '-'*40
+        self.logger.info(f'{line} Train Epoch {self.epoch + 1}/{self.max_epochs} {line}')
         for batch_idx, batch_data in enumerate(self.train_dataloader):
             t1 = time.time()
             self.optimizer.zero_grad()
@@ -110,13 +111,16 @@ class TrainRunner(InferenceRunner):
         pass
 
     def _valid(self):
-        self.logger.info(f"Start Valid")
+        line = '-' * 40
+        self.logger.info(f"{line} Valid Epoch {self.epoch + 1}/{self.max_epochs} {line}")
         self.model.eval()
 
         all_seg_metrics_dict = dict()
         for i in range(len(self.label2class)):
             all_seg_metrics_dict[self.label2class[i]] = []
 
+        valid_iters = len(self.valid_dataloader)
+        interval = valid_iters // 10
         with torch.no_grad():
             for idx, batch_data in enumerate(self.valid_dataloader):
                 self.image = batch_data['image'].cuda()
@@ -149,7 +153,8 @@ class TrainRunner(InferenceRunner):
                         metric, threshold_list = calculate_metric_for_one(y_prob, y_true)
                         metrics.append(metric)
                         all_seg_metrics_dict["foreground"] += [metric]
-
+                if idx % interval == 0 and idx // interval > 0:
+                    self.logger.info(f"Step:{idx}/{valid_iters}")
         curr_metrics, best_index = parse_seg_metrics(all_seg_metrics_dict)
 
         if self.select_metric == 'f1':
@@ -192,7 +197,6 @@ class TrainRunner(InferenceRunner):
     def __call__(self, *args, **kwargs):
 
         # self._valid()
-        self.logger.info(f'Start training.')
         start_time = time.time()
         for _ in range(self.epoch, self.max_epochs):
             if hasattr(self.train_dataloader.sampler, 'set_epoch'):
@@ -210,7 +214,7 @@ class TrainRunner(InferenceRunner):
         total_time = datetime.timedelta(seconds=int(time.time() - start_time))
         self.logger.info(f'End training. Total training time: {total_time}')
 
-        self._torch2onnx()
+        # self._torch2onnx()
 
 
 
