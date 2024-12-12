@@ -23,7 +23,7 @@
   "inference": {
     "multi_label": false,
     "transform": [
-      {"type": "Resize", "always_apply": true, "width": 512, "height": 512, "padding": 0},
+      {"type": "Resize", "always_apply": true, "width": 256, "height": 256, "padding": 0},
       {"type": "Normalize", "always_apply": true, "scale": 1.0},
       {"type": "ToTensor", "always_apply": true}
     ],
@@ -124,7 +124,7 @@
   "data": {
     "train": {
       "transform": [
-          {"type": "Resize", "width": 512, "height": 512, "always_apply": true},
+          {"type": "Resize", "width": 256, "height": 256, "always_apply": true},
           {"type": "Normalize", "always_apply": true, "scale": 1.0},
           {"type": "ToTensor", "always_apply": true}
       ],
@@ -147,7 +147,7 @@
       },
       "dataloader": {
         "type": "DataLoader",
-        "samples_per_gpu": 16,
+        "samples_per_gpu": 32,
         "workers_per_gpu": 16,
         "shuffle": true,
         "drop_last": true,
@@ -156,7 +156,7 @@
     },
     "valid": {
       "transform": [
-          {"type": "Resize", "width": 512, "height": 512, "always_apply": true},
+          {"type": "Resize", "width": 256, "height": 256, "always_apply": true},
           {"type": "Normalize", "always_apply": true, "scale": 1.0},
           {"type": "ToTensor", "always_apply": true}
         ],
@@ -179,8 +179,8 @@
       },
       "dataloader": {
         "type": "DataLoader",
-        "samples_per_gpu": 8,
-        "workers_per_gpu": 4,
+        "samples_per_gpu": 32,
+        "workers_per_gpu": 16,
         "shuffle": false,
         "drop_last": false,
         "pin_memory": true
@@ -191,7 +191,7 @@
       "lr": 0.001,
       "weight_decay": 0.00202158
     },
-    "max_epochs": 120,
+    "max_epochs": 40,
     "lr_scheduler": {
       "type": "CosineAnnealingWarmRestarts",
       "T_0": 40,

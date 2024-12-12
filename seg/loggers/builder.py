@@ -5,7 +5,8 @@ import os
 
 
 def build_logger(cfg, default_args):
-    timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
+    # timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
+    timestamp = default_args['timestamp']
     format_ = '%(asctime)s - %(levelname)s - %(message)s'
 
     formatter = logging.Formatter(format_)

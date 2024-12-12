@@ -60,17 +60,20 @@ def calculate_polygon_iou(polygon1, polygon2):
     polygon1 = np.asarray(polygon1)
     polygon2 = np.asarray(polygon2)
 
+    polygon1 -= [[x_min, y_min]]
+    polygon2 -= [[x_min, y_min]]
+
     mask1 = cv2.fillPoly(image1, [polygon1], 1)
     mask2 = cv2.fillPoly(image2, [polygon2], 1)
 
     mask_and = np.bitwise_and(mask1, mask2)
-    area_and = np.sum(mask_and)
+    area_and = np.sum(mask_and).astype(np.float32)
     if area_and == 0:
         return 0.0
 
     mask_or = np.bitwise_or(mask1, mask2)
-    area_or = np.sum(mask_or)
-    iou = float(area_and) / float(area_or)
+    area_or = np.sum(mask_or).astype(np.float32)
+    iou = area_and / area_or
     return iou
 
 
@@ -85,9 +88,9 @@ def confuse_matrix_for_segmentation(
     threshold_list = np.arange(min_score_threshold, max_score_threshold, score_step)
     gt_polygon_points = get_contour_points_from_mask(gt_label)
     num_thres = threshold_list.shape[0]
-    tp_list = np.zeros((num_thres), dtype=np.int32)
-    fp_list = np.zeros((num_thres), dtype=np.int32)
-    fn_list = np.zeros((num_thres), dtype=np.int32)
+    tp_list = np.zeros(num_thres, dtype=np.int32)
+    fp_list = np.zeros(num_thres, dtype=np.int32)
+    fn_list = np.zeros(num_thres, dtype=np.int32)
     for thres_idx, threshold in enumerate(list(threshold_list)):
         pred_label = np.array(predict_prob >= threshold, dtype=np.uint8) * 255
 

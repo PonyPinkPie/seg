@@ -1,5 +1,6 @@
 import os
-
+from os.path import join as opj
+import time
 import torch
 from torch.backends import cudnn
 import random
@@ -11,7 +12,8 @@ from seg.loggers import build_logger
 
 class BaseRunner(object):
     def __init__(self, cfg):
-        self.workdir = cfg.get('workdir', 'workdir')
+        self.timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
+        self.workdir = opj(cfg.get('workdir', 'workdir'), self.timestamp)
         os.makedirs(self.workdir, exist_ok=True)
         logger_cfg = cfg.get('logger')
         if logger_cfg is None:
@@ -41,7 +43,7 @@ class BaseRunner(object):
         # self.metrics = self._build_metrics(cfg.get('metrics', {}))
 
     def _build_logger(self, cfg):
-        return build_logger(cfg, dict(workdir=self.workdir))
+        return build_logger(cfg, dict(workdir=self.workdir,timestamp=self.timestamp))
 
     def _set_cudnn(self, deterministic, benchmark):
         self.logger.info('Set cudnn deterministic {}'.format(deterministic))

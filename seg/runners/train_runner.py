@@ -1,5 +1,6 @@
 import time
-
+import traceback
+from os.path import join as opj
 import torch
 
 from .inference_runner import InferenceRunner
@@ -12,13 +13,15 @@ from collections.abc import Iterable
 import numpy as np
 from seg.utils.gpu import get_gpu_memroy
 import datetime
-from seg.metrics.common import calculate_metric_for_more, calculate_metric_for_one, parse_seg_metrics, parse_seg_metrics_to_table
+from seg.metrics.common import calculate_metric_for_more, calculate_metric_for_one, parse_seg_metrics, \
+    parse_seg_metrics_to_table
+from seg.export.converters import torch2trt, TRTModel, save, load, torch2onnx
 
 
 class TrainRunner(InferenceRunner):
     def __init__(self, train_cfg, inference_cfg, base_cfg=None):
         super().__init__(inference_cfg, base_cfg)
-
+        self.train_cfg, self.inference_cfg, self.base_cfg = train_cfg.copy(), inference_cfg.copy(), base_cfg.copy()
         self.train_dataloader = self._build_dataloader(train_cfg['train'])
 
         self.valid_dataloader = self._build_dataloader(train_cfg['valid'])
@@ -34,6 +37,10 @@ class TrainRunner(InferenceRunner):
         self.train_valid_interval = train_cfg.get('train_valid_interval', 1)
 
         self.best_value = 0
+        self.best_pth_path = opj(self.workdir, self.timestamp+'.pth')
+        self.select_metric = train_cfg.get('select_metric').lower()
+        assert self.select_metric in ['f1', 'iou', 'b_f1_iou', 'b_p_r_iou'], \
+            f"select_metric must be one of 'f1', 'iou', 'b_f1_iou', 'b_p_r_iou', but got {self.select_metric}"
 
     def _build_dataloader(self, cfg):
         transform = self._build_transform(cfg['transform'])
@@ -118,9 +125,9 @@ class TrainRunner(InferenceRunner):
                 if len(self.class2label) > 1:
                     # 多分类评估
                     y_probs = np.transpose(probs, (0, 2, 3, 1))  # [B C H W] -> [B H W C]
-                    y_preds = np.argmax(y_probs, axis=-1)
+                    y_preds = np.argmax(y_probs, axis=-1).astype(np.uint8)
                     y_trues = self.mask
-                    for class_idx in self.class2label.values():
+                    for class_idx in range(len(self.class2label)):
                         metrics = []
                         for y_pred, y_prob, y_true in zip(y_preds, y_probs, y_trues):
                             mask = (y_true == class_idx).astype(np.uint8)
@@ -128,7 +135,7 @@ class TrainRunner(InferenceRunner):
                                 # GT 不存在， 计算召回是都为0，因此不参与计算
                                 continue
                             prob = y_prob[..., class_idx]
-                            pred = (y_pred == mask).astype(np.uint8)
+                            pred = (y_pred == class_idx).astype(np.uint8)
                             metric, threshold_list = calculate_metric_for_more(prob, pred, mask)
                             metrics.append(metric)
                         all_seg_metrics_dict[self.label2class[class_idx]] += metrics
@@ -145,19 +152,48 @@ class TrainRunner(InferenceRunner):
 
         curr_metrics, best_index = parse_seg_metrics(all_seg_metrics_dict)
 
-        curr_mean_f1 = curr_metrics[-1, 5]
-        curr_mean_iou = curr_metrics[-1, 6]
-        if self.best_value < curr_mean_f1:
-            self.best_value = curr_mean_f1
-            self.best_metrics = curr_metrics
-            threshold = threshold_list[best_index]
+        if self.select_metric == 'f1':
+            curr_mean_metric = curr_metrics[-1, 5]
+        elif self.select_metric == 'iou':
+            curr_mean_metric = curr_metrics[-1, 6]
+        else:
+            curr_mean_metric = curr_metrics[-1, 5]
 
+        if self.best_value < curr_mean_metric:
+            self.best_value = curr_mean_metric
+            self.best_metrics = curr_metrics
+            self.threshold = threshold_list[best_index]
+            torch.save(self.model.state_dict(), self.best_pth_path)
+            self.logger.info(f'Saved best model to {self.best_pth_path}. Threshold: {self.threshold:.2f}')
         parse_seg_metrics_to_table(curr_metrics, self.best_metrics[-1, :], self.label2class, self.logger)
+
+    def _torch2onnx(self):
+        height, width = self.train_cfg['valid']['transform'][0]['height'], self.train_cfg['valid']['transform'][0][
+            'width']
+        self.logger.info(f"Load model from {self.best_pth_path}.")
+        self.model = torch.load(self.best_pth_path, map_location='cuda:0')
+        onnx_cfg = dict(
+            model=self.model,
+            dummy_input=[1, 3, height, width],
+            onnx_model_name=self.best_pth_path.replace('.pth', '.onnx'),
+            opset_version=17
+        )
+        try:
+            self.logger.info(f"Convert onnx.")
+            torch2onnx(**onnx_cfg)
+            self.logger.info(f"Convert onnx successfully!")
+        except Exception as e:
+            self.logger.error(f"Convert onnx failed. {e} \n{traceback.format_exc()}")
+
+    def _onnx2trt(self):
+        pass
+
 
     def __call__(self, *args, **kwargs):
 
         # self._valid()
-
+        self.logger.info(f'Start training.')
+        start_time = time.time()
         for _ in range(self.epoch, self.max_epochs):
             if hasattr(self.train_dataloader.sampler, 'set_epoch'):
                 self.train_dataloader.sampler.set_epoch(self.epoch)
@@ -170,3 +206,11 @@ class TrainRunner(InferenceRunner):
 
             eta_string = str(datetime.timedelta(seconds=int(train_valid_time * (self.max_epochs - self.epoch))))
             self.logger.info(f"ETA:{eta_string}")
+
+        total_time = datetime.timedelta(seconds=int(time.time() - start_time))
+        self.logger.info(f'End training. Total training time: {total_time}')
+
+        self._torch2onnx()
+
+
+
