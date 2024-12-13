@@ -11,17 +11,21 @@ from seg.optimizers import build_optimizer
 from seg.lr_schedulers import build_lr_scheduler
 from collections.abc import Iterable
 import numpy as np
-from seg.utils.gpu import get_gpu_memroy
+from seg.utils import get_gpu_memroy, save_json, save_checkpoint, load_checkpoint
 import datetime
 from seg.metrics.common import calculate_metric_for_more, calculate_metric_for_one, parse_seg_metrics, \
     parse_seg_metrics_to_table
-from seg.export.converters import torch2trt, TRTModel, save, load, torch2onnx
+from seg.export.converters import TRTModel, save, load, torch2onnx, onnx2trt
 
 
 class TrainRunner(InferenceRunner):
     def __init__(self, train_cfg, inference_cfg, base_cfg=None):
         super().__init__(inference_cfg, base_cfg)
         self.train_cfg, self.inference_cfg, self.base_cfg = train_cfg.copy(), inference_cfg.copy(), base_cfg.copy()
+        cfg = {'common': self.base_cfg, 'inference': self.inference_cfg, 'data': self.train_cfg}
+        jp = opj(self.workdir, self.timestamp + '.json')
+        save_json(cfg, jp)
+
         self.train_dataloader = self._build_dataloader(train_cfg['train'])
 
         self.valid_dataloader = self._build_dataloader(train_cfg['valid'])
@@ -37,7 +41,7 @@ class TrainRunner(InferenceRunner):
         self.train_valid_interval = train_cfg.get('train_valid_interval', 1)
 
         self.best_value = 0
-        self.best_pth_path = opj(self.workdir, self.timestamp+'.pth')
+        self.best_pth_path = opj(self.workdir, self.timestamp + '.pth')
         self.select_metric = train_cfg.get('select_metric', 'f1').lower()
         assert self.select_metric in ['f1', 'iou', 'b_f1_iou', 'b_p_r_iou'], \
             f"select_metric must be one of 'f1', 'iou', 'b_f1_iou', 'b_p_r_iou', but got {self.select_metric}"
@@ -92,7 +96,7 @@ class TrainRunner(InferenceRunner):
     def _train(self):
         self.iter = 0
         self.model.train()
-        line = '-'*40
+        line = '-' * 40
         self.logger.info(f'{line} Train Epoch {self.epoch + 1}/{self.max_epochs} {line}')
         for batch_idx, batch_data in enumerate(self.train_dataloader):
             t1 = time.time()
@@ -110,9 +114,12 @@ class TrainRunner(InferenceRunner):
         self.lr_scheduler.step()
         pass
 
-    def _valid(self):
+    def _valid(self, is_valid=True):
         line = '-' * 40
-        self.logger.info(f"{line} Valid Epoch {self.epoch + 1}/{self.max_epochs} {line}")
+        if is_valid:
+            self.logger.info(f"{line} Valid Epoch {self.epoch + 1}/{self.max_epochs} {line}")
+        else:
+            self.logger.info(f"{line} Valid Infer Using TRT Model {line}")
         self.model.eval()
 
         all_seg_metrics_dict = dict()
@@ -125,7 +132,10 @@ class TrainRunner(InferenceRunner):
             for idx, batch_data in enumerate(self.valid_dataloader):
                 self.image = batch_data['image'].cuda()
                 self.mask = batch_data['mask'].numpy().astype(np.uint8)
-                probs = self.model(self.image).cpu().numpy()
+                if is_valid:
+                    probs = self.model(self.image).cpu().numpy()
+                else:
+                    probs = self.model(self.image)[0].cpu().numpy()
                 if len(self.class2label) > 1:
                     # 多分类评估
                     y_probs = np.transpose(probs, (0, 2, 3, 1))  # [B C H W] -> [B H W C]
@@ -164,22 +174,24 @@ class TrainRunner(InferenceRunner):
         else:
             curr_mean_metric = curr_metrics[-1, 5]
 
-        if self.best_value < curr_mean_metric:
+        if self.best_value < curr_mean_metric and is_valid:
             self.best_value = curr_mean_metric
             self.best_metrics = curr_metrics
             self.threshold = threshold_list[best_index]
-            torch.save(self.model.state_dict(), self.best_pth_path)
-            self.logger.info(f'Saved best model to {self.best_pth_path}. Threshold: {self.threshold:.2f}')
+            meta = {'threshold': self.threshold}
+            save_checkpoint(self.model, self.best_pth_path, meta=meta)
+            self.logger.info(f'Saved best model to {self.best_pth_path} Threshold: {self.threshold:.2f}')
         parse_seg_metrics_to_table(curr_metrics, self.best_metrics[-1, :], self.label2class, self.logger)
 
     def _torch2onnx(self):
-        height, width = self.train_cfg['valid']['transform'][0]['height'], self.train_cfg['valid']['transform'][0][
-            'width']
-        self.logger.info(f"Load model from {self.best_pth_path}.")
-        self.model = torch.load(self.best_pth_path, map_location='cuda:0')
+        self.logger.info(f"Load model from {self.best_pth_path}")
+        height, width = (self.train_cfg['valid']['transform'][0]['height'],
+                         self.train_cfg['valid']['transform'][0]['width'])
+        ckpt = load_checkpoint(self.model, self.best_pth_path)
+        threshold = ckpt['meta']['threshold']
         onnx_cfg = dict(
             model=self.model,
-            dummy_input=[1, 3, height, width],
+            dummy_input=torch.ones(1, 3, height, width).cuda(),
             onnx_model_name=self.best_pth_path.replace('.pth', '.onnx'),
             opset_version=17
         )
@@ -188,15 +200,29 @@ class TrainRunner(InferenceRunner):
             torch2onnx(**onnx_cfg)
             self.logger.info(f"Convert onnx successfully!")
         except Exception as e:
-            self.logger.error(f"Convert onnx failed. {e} \n{traceback.format_exc()}")
+            self.logger.error(f"Convert onnx failed! {e} \n{traceback.format_exc()}")
 
     def _onnx2trt(self):
-        pass
-
+        best_pth_path = self.best_pth_path
+        # best_pth_path = '/workspace/mycode/03-seg/seg/workdir/test/20241213_111019/20241213_111019.pth'
+        trt_cfg = dict(
+            max_batch_size=32,
+            mode='fp16'
+        )
+        try:
+            self.logger.info(f"Convert trt. It takes about 10 minutes for segmentation model.")
+            self.model = TRTModel(best_pth_path, **trt_cfg)
+            self.logger.info(f"Convert trt successfully!")
+        except Exception as e:
+            self.logger.error(f"Convert trt failed! {e} \n{traceback.format_exc()}")
 
     def __call__(self, *args, **kwargs):
 
         # self._valid()
+        # self._torch2onnx()
+        # self._onnx2trt()
+        # self._valid(is_valid=False)
+
         start_time = time.time()
         for _ in range(self.epoch, self.max_epochs):
             if hasattr(self.train_dataloader.sampler, 'set_epoch'):
@@ -214,7 +240,6 @@ class TrainRunner(InferenceRunner):
         total_time = datetime.timedelta(seconds=int(time.time() - start_time))
         self.logger.info(f'End training. Total training time: {total_time}')
 
-        # self._torch2onnx()
-
-
-
+        self._torch2onnx()
+        self._onnx2trt()
+        self._valid(is_valid=False)

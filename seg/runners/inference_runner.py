@@ -4,7 +4,7 @@ from seg.transforms.compose import Compose
 
 from seg.models.registry import build_segmentation
 from seg.utils.distribute import init_dist_pytorch, get_dist_info, cuda_is_available, devices_count
-# from seg.metrics import build_metrics
+
 
 class InferenceRunner(BaseRunner):
     def __init__(self, inference_cfg, base_cfg=None):
@@ -17,7 +17,6 @@ class InferenceRunner(BaseRunner):
         self._build_model(inference_cfg['model'])
 
         self.model.eval()
-
 
     def _build_model(self, cfg):
         self.logger.info(f"Building model.")
@@ -40,19 +39,6 @@ class InferenceRunner(BaseRunner):
     def _build_transform(self, cfg):
         return Compose(cfg)
 
-
-    # def compute(self, output):
-    #     if self.multi_label:
-    #         output = output.sigmoid()
-    #         output = torch.where(output >= 0.5,
-    #                              torch.full_like(output, 1),
-    #                              torch.full_like(output, 0)).long()
-    #
-    #     else:
-    #         output = output.softmax(dim=1)
-    #         _, output = torch.max(output, dim=1)
-    #     return output
-
     def __call__(self, image, mask):
         with torch.no_grad():
             data = {'image': image, 'mask': mask}
@@ -65,4 +51,3 @@ class InferenceRunner(BaseRunner):
             # output = self.compute(output)
             output = output.squeeze().cpu().numpy()
         return output
-

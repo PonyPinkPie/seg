@@ -148,7 +148,7 @@
       },
       "dataloader": {
         "type": "DataLoader",
-        "samples_per_gpu": 32,
+        "samples_per_gpu": 64,
         "workers_per_gpu": 16,
         "shuffle": true,
         "drop_last": true,
@@ -192,7 +192,7 @@
       "lr": 0.001,
       "weight_decay": 0.00202158
     },
-    "max_epochs": 1,
+    "max_epochs": 40,
     "lr_scheduler": {
       "type": "CosineAnnealingWarmRestarts",
       "T_0": 40,
@@ -201,9 +201,27 @@
     "select_metric": "F1"
   },
   "trt": {
-    "dummy_input": [1, 3, 256, 256],
-    "max_batch_size": 32,
-    "fp16_mode": true,
-    "opset_version": 17
+    "transform": [
+      {"type": "Resize", "always_apply": true, "width": 256, "height": 256, "padding": 0},
+      {"type": "Normalize", "always_apply": true, "scale": 1.0},
+      {"type": "ToTensor", "always_apply": true}
+    ],
+    "shape_labels": [
+          "posun",
+          "AFM",
+          "SCT",
+          "PFM",
+          "OX",
+          "EXN_rough",
+          "EXN",
+          "EXC",
+          "AOG",
+          "AOC"
+    ],
+    "trt": {
+      "engine": "/workspace/mycode/03-seg/seg/workdir/test/20241213_135901/20241213_135901_fp16_mbs32.engine",
+      "max_batch_size": 32,
+      "mode": "fp16"
+    }
   }
 }

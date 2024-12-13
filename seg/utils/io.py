@@ -44,6 +44,11 @@ def load_json(json_path):
     else:
         raise FileNotFoundError(f"json file {json_path} not found")
 
+def save_json(json_dict, json_path):
+    with open(json_path, 'w') as f:
+        json.dump(json_dict, f, indent=4)
+
+
 def annotation2mask(annotation: dict, class2label_dict: dict, min_pixel=2):
     """
     将json文件读取的标注信息转化成mask.

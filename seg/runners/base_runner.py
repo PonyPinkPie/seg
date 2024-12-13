@@ -24,7 +24,7 @@ class BaseRunner(object):
                 )
             )
         self.logger = self._build_logger(logger_cfg)
-
+        self.logger.info(f'workdir: {self.workdir}')
         self.distribute = cfg.get('distribute', False)
 
         self.gpu_num = devices_count()

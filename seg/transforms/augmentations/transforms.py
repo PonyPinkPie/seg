@@ -87,8 +87,8 @@ class Resize(BaseTransform):
             }
         elif 'images' in kwargs.keys():
             return {
-                'cols': kwargs['image'][0].shape[1],
-                'rows': kwargs['image'][0].shape[0],
+                'cols': kwargs['images'][0].shape[1],
+                'rows': kwargs['images'][0].shape[0],
                 'padding': padding,
             }
         else:
