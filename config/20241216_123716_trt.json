@@ -1,0 +1,39 @@
+{
+    "onnx": {
+        "opset_version": 17
+    },
+    "trt": {
+        "max_batch_size": 32,
+        "mode": "fp16",
+        "engine": "/workspace/mycode/03-seg/seg/workdir/test/20241216_114845/20241216_114845.engine"
+    },
+    "transform": [
+        {
+            "type": "Resize",
+            "width": 256,
+            "height": 256,
+            "always_apply": true
+        },
+        {
+            "type": "Normalize",
+            "always_apply": true,
+            "scale": 1.0
+        },
+        {
+            "type": "ToTensor",
+            "always_apply": true
+        }
+    ],
+    "shape_labels": [
+        "posun",
+        "AFM",
+        "SCT",
+        "PFM",
+        "OX",
+        "EXN_rough",
+        "EXN",
+        "EXC",
+        "AOG",
+        "AOC"
+    ]
+}

@@ -19,10 +19,12 @@ from seg.export.converters import TRTModel, save, load, torch2onnx, onnx2trt
 
 
 class TrainRunner(InferenceRunner):
-    def __init__(self, train_cfg, inference_cfg, base_cfg=None):
+    def __init__(self, export_cfg, train_cfg, inference_cfg, base_cfg=None):
         super().__init__(inference_cfg, base_cfg)
-        self.train_cfg, self.inference_cfg, self.base_cfg = train_cfg.copy(), inference_cfg.copy(), base_cfg.copy()
-        cfg = {'common': self.base_cfg, 'inference': self.inference_cfg, 'data': self.train_cfg}
+        self.export_cfg, self.train_cfg, self.inference_cfg, self.base_cfg = \
+            export_cfg.copy(), train_cfg.copy(), inference_cfg.copy(), base_cfg.copy()
+
+        cfg = {'common': self.base_cfg, 'inference': self.inference_cfg, 'data': self.train_cfg, 'export': self.export_cfg}
         jp = opj(self.workdir, self.timestamp + '.json')
         save_json(cfg, jp)
 
@@ -117,7 +119,7 @@ class TrainRunner(InferenceRunner):
     def _valid(self, is_valid=True):
         line = '-' * 40
         if is_valid:
-            self.logger.info(f"{line} Valid Epoch {self.epoch + 1}/{self.max_epochs} {line}")
+            self.logger.info(f"{line} Valid Epoch {self.epoch}/{self.max_epochs} {line}")
         else:
             self.logger.info(f"{line} Valid Infer Using TRT Model {line}")
         self.model.eval()
@@ -203,7 +205,7 @@ class TrainRunner(InferenceRunner):
             self.logger.error(f"Convert onnx failed! {e} \n{traceback.format_exc()}")
 
     def _onnx2trt(self):
-        best_pth_path = self.best_pth_path
+        onnx_path = self.best_pth_path.replace('.pth', '.onnx')
         # best_pth_path = '/workspace/mycode/03-seg/seg/workdir/test/20241213_111019/20241213_111019.pth'
         trt_cfg = dict(
             max_batch_size=32,
@@ -211,10 +213,68 @@ class TrainRunner(InferenceRunner):
         )
         try:
             self.logger.info(f"Convert trt. It takes about 10 minutes for segmentation model.")
-            self.model = TRTModel(best_pth_path, **trt_cfg)
+            self.model = TRTModel(onnx_path, **trt_cfg)
             self.logger.info(f"Convert trt successfully!")
         except Exception as e:
             self.logger.error(f"Convert trt failed! {e} \n{traceback.format_exc()}")
+
+
+    def _export(self):
+        # 1. torch to onnx
+        self.logger.info(f"Load model from {self.best_pth_path}")
+        height, width = (self.train_cfg['valid']['transform'][0]['height'],
+                         self.train_cfg['valid']['transform'][0]['width'])
+        ckpt = load_checkpoint(self.model, self.best_pth_path)
+        # threshold = ckpt['meta']['threshold']
+        onnx_path = self.best_pth_path.replace('.pth', '.onnx')
+        onnx_cfg = dict(
+            model=self.model,
+            dummy_input=torch.ones(1, 3, height, width).cuda(),
+            onnx_model_name=onnx_path,
+            opset_version=self.export_cfg['onnx']['opset_version']
+        )
+        try:
+            self.logger.info(f"Convert onnx.")
+            torch2onnx(**onnx_cfg)
+            self.logger.info(f"Convert onnx successfully!")
+        except Exception as e:
+            self.logger.error(f"Convert onnx failed! {e} \n{traceback.format_exc()}")
+
+        # 2. onnx to trt
+        mode = self.export_cfg['trt']['mode']
+        max_batch_size = self.export_cfg['trt']['max_batch_size']
+        trt_cfg = dict(
+            mode=mode,
+            max_batch_size=max_batch_size
+        )
+        try:
+            self.logger.info(f"Convert trt. It takes about 10 minutes for segmentation model.")
+            self.model = TRTModel(onnx_path, **trt_cfg)
+            self.logger.info(f"Convert trt successfully!")
+        except Exception as e:
+            self.logger.error(f"Convert trt failed! {e} \n{traceback.format_exc()}")
+
+        # 3. valid using engine
+        try:
+            self.logger.info(f"TRT model valid.")
+            self._valid(is_valid=False)
+            self.logger.info(f"TRT model valid done.")
+        except Exception as e:
+            self.logger.error(f"TRT model valid failed! {e} \n{traceback.format_exc()}")
+
+        # 4. write trt cfg
+        try:
+            self.logger.info(f"Save TRT json.")
+            self.export_cfg['trt']['engine'] = onnx_path.replace(".onnx", ".engine")
+            self.export_cfg['transform'] = self.train_cfg['valid']['transform']
+            self.export_cfg['shape_labels'] = self.train_cfg['valid']['dataset']['shape_labels']
+            trt_cfg_path = onnx_path.replace('.onnx', '_trt.json')
+            save_json(self.export_cfg, trt_cfg_path)
+            self.logger.info(f"Saved trt json to {trt_cfg_path}")
+        except Exception as e:
+            self.logger.error(f"Save TRT json failed. {e}\n{traceback.format_exc()}")
+
+
 
     def __call__(self, *args, **kwargs):
 
@@ -240,6 +300,4 @@ class TrainRunner(InferenceRunner):
         total_time = datetime.timedelta(seconds=int(time.time() - start_time))
         self.logger.info(f'End training. Total training time: {total_time}')
 
-        self._torch2onnx()
-        self._onnx2trt()
-        self._valid(is_valid=False)
+        self._export()

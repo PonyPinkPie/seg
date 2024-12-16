@@ -23,7 +23,7 @@
   "inference": {
     "multi_label": false,
     "transform": [
-      {"type": "Resize", "always_apply": true, "width": 256, "height": 256, "padding": 0},
+      {"type": "Resize", "always_apply": true, "width": 512, "height": 512, "padding": 0},
       {"type": "Normalize", "always_apply": true, "scale": 1.0},
       {"type": "ToTensor", "always_apply": true}
     ],
@@ -125,7 +125,7 @@
   "data": {
     "train": {
       "transform": [
-          {"type": "Resize", "width": 256, "height": 256, "always_apply": true},
+          {"type": "Resize", "width": 512, "height": 512, "always_apply": true},
           {"type": "Normalize", "always_apply": true, "scale": 1.0},
           {"type": "ToTensor", "always_apply": true}
       ],
@@ -148,7 +148,7 @@
       },
       "dataloader": {
         "type": "DataLoader",
-        "samples_per_gpu": 64,
+        "samples_per_gpu": 16,
         "workers_per_gpu": 16,
         "shuffle": true,
         "drop_last": true,
@@ -157,7 +157,7 @@
     },
     "valid": {
       "transform": [
-          {"type": "Resize", "width": 256, "height": 256, "always_apply": true},
+          {"type": "Resize", "width": 512, "height": 512, "always_apply": true},
           {"type": "Normalize", "always_apply": true, "scale": 1.0},
           {"type": "ToTensor", "always_apply": true}
         ],
@@ -180,7 +180,7 @@
       },
       "dataloader": {
         "type": "DataLoader",
-        "samples_per_gpu": 32,
+        "samples_per_gpu": 16,
         "workers_per_gpu": 16,
         "shuffle": false,
         "drop_last": false,
@@ -192,34 +192,17 @@
       "lr": 0.001,
       "weight_decay": 0.00202158
     },
-    "max_epochs": 1,
+    "max_epochs": 120,
     "lr_scheduler": {
       "type": "CosineAnnealingWarmRestarts",
       "T_0": 40,
       "eta_min": 1e-8
     },
-    "select_metric": "F1"
+    "select_metric": "iou"
   },
-  "trt": {
-    "transform": [
-      {"type": "Resize", "always_apply": true, "width": 256, "height": 256, "padding": 0},
-      {"type": "Normalize", "always_apply": true, "scale": 1.0},
-      {"type": "ToTensor", "always_apply": true}
-    ],
-    "shape_labels": [
-          "posun",
-          "AFM",
-          "SCT",
-          "PFM",
-          "OX",
-          "EXN_rough",
-          "EXN",
-          "EXC",
-          "AOG",
-          "AOC"
-    ],
+  "export": {
+    "onnx": {"opset_version": 17},
     "trt": {
-      "engine": "/workspace/mycode/03-seg/seg/workdir/test/20241213_135901/20241213_135901_fp16_mbs32.engine",
       "max_batch_size": 32,
       "mode": "fp16"
     }

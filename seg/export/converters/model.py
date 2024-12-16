@@ -44,8 +44,8 @@ class TRTModel(nn.Module):
     def __init__(self, engine: str, mode="fp16", max_batch_size: int = 32):
         super(TRTModel, self).__init__()
         assert engine.split('.')[-1] in ['onnx', 'engine'], f"path must end with '.onnx' or '.engine', got {engine.split(',')[-1]}"
-        engine_file = engine.replace(".pth", f"_{mode}_mbs{max_batch_size}.engine")
-        onnx_file = engine.replace('.pth', '.onnx')
+        engine_file = engine.replace(".onnx", ".engine")
+        onnx_file = engine.replace('.engine', '.onnx')
         if ope(engine_file):
             self.engine = load(engine_file)
         elif ope(onnx_file):

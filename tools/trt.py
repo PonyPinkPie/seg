@@ -14,7 +14,7 @@ from seg.utils import file_to_config, save_json
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cfg', type=str, default='/workspace/mycode/03-seg/seg/config/train.json')
+    parser.add_argument('--cfg', type=str, default='/workspace/mycode/03-seg/seg/workdir/test/20241216_140322/20241216_140322_trt.json')
     # parser.add_argument('--cfg', type=str, default='C:\mycode\mycode\seg\config\\train_local.json')
     parser.add_argument('--image_path', type=str, default='/workspace/mycode/03-seg/seg/local/04fa7bde-8a9b-4ce6-a644-7e287a56a8f4.jpg')
     args = parser.parse_args()
@@ -28,18 +28,29 @@ def main():
     vis_path = image_path.replace('.jpg', '-vis.jpg')
     jp = image_path.replace('.jpg', '.json')
     cfg = file_to_config(cfg_path)
-    trt_cfg = cfg['trt']
-    trt_runner = TRTRunner(trt_cfg)
+    trt_runner = TRTRunner(cfg)
     image = cv2.imread(image_path)
     images = [image] * 2
     result = trt_runner(images)
+    image_copy = image.copy()
     save_json(result, jp)
     info_dict = result[0]
     for cls, item in info_dict.items():
-        for idx, points in enumerate(item.items()):
-            contours = np.array(points, dtype=np.int32)[:, None,:]
-            cv2.drawContours(image, [contours], 0, (0, 0, 255), thickness=2)
-            cv2.putText(image, f"")
+        for idx, item_info in item.items():
+            contours, area, score = item_info['contour'], item_info['area'], item_info['score']
+
+            text = f"{cls}_{area}_{score}"
+            org = (int(contours[0][0]), int(contours[0][1]))
+            fontFace = cv2.FONT_HERSHEY_SIMPLEX
+            fontScale = 1
+            color = (255, 255, 255)  # BGR格式，白色
+            thickness = 2
+
+            contours = np.array(contours, dtype=np.int32)[:, None, :]
+            cv2.drawContours(image_copy, [contours], 0, (0, 0, 255), thickness=2)
+            cv2.putText(image_copy, text, org, fontFace, fontScale, color, thickness)
+
+    cv2.imwrite(vis_path, np.hstack([image, image_copy]))
 
 
 if __name__ == '__main__':
