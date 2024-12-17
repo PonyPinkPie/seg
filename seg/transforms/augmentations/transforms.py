@@ -6,7 +6,6 @@ from .functional import *
 from ..builder import TRANSFORMS
 
 
-
 class BaseTransform:
     def __init__(self, always_apply=False, p=0.5, **kwargs):
         self.always_apply = always_apply
@@ -94,6 +93,7 @@ class Resize(BaseTransform):
         else:
             raise ValueError('No image or images in Resize')
 
+
 @TRANSFORMS.register_module()
 class HorizontalFlip(BaseTransform):
     def __init__(self, always_apply=False, p=0.5):
@@ -118,6 +118,7 @@ class HorizontalFlip(BaseTransform):
             }
         else:
             raise ValueError('No image or images in HorizontalFlip')
+
 
 @TRANSFORMS.register_module()
 class VerticalFlip(BaseTransform):
@@ -144,6 +145,7 @@ class VerticalFlip(BaseTransform):
         else:
             raise ValueError('No image or images in VerticalFlip')
 
+
 @TRANSFORMS.register_module()
 class CenterFlip(BaseTransform):
     def __init__(self, always_apply=False, p=0.5):
@@ -168,6 +170,7 @@ class CenterFlip(BaseTransform):
             }
         else:
             raise ValueError('No image or images in CenterFlip')
+
 
 @TRANSFORMS.register_module()
 class Rotate(BaseTransform):
@@ -211,6 +214,7 @@ class Rotate(BaseTransform):
             }
         else:
             raise ValueError('No image or images in Rotate')
+
 
 @TRANSFORMS.register_module()
 class ColorJitter(BaseTransform):
@@ -266,6 +270,8 @@ class ColorJitter(BaseTransform):
         random.shuffle(transforms)
 
         return {"transforms": transforms}
+
+
 @TRANSFORMS.register_module()
 class RandomCrop(BaseTransform):
     def __init__(self,
@@ -328,8 +334,8 @@ class RandomCrop(BaseTransform):
         if self.crop_object:
             try:
                 yy, xx = self._get_yy_xx(kwargs)
-                index = random.randint(0, len(yy)-1)
-                coord = [max(int(xx[index] - crop_width*0.5), 0), max(int(yy[index] - crop_height*0.5), 0)]
+                index = random.randint(0, len(yy) - 1)
+                coord = [max(int(xx[index] - crop_width * 0.5), 0), max(int(yy[index] - crop_height * 0.5), 0)]
                 w_start = min(coord[0] / (width - crop_width), 1.)
                 h_start = min(coord[1] / (height - crop_height), 1.)
                 no_object = False
@@ -339,13 +345,15 @@ class RandomCrop(BaseTransform):
             h_start = random.random()
             w_start = random.random()
         return {
-            "h_start": h_start ,
+            "h_start": h_start,
             "w_start": w_start,
             "rows": width,
             "cols": height,
             "crop_height": crop_height,
             "crop_width": crop_width
         }
+
+
 @TRANSFORMS.register_module()
 class CenterCrop(RandomCrop):
     def get_params(self, **params):
@@ -368,6 +376,8 @@ class CenterCrop(RandomCrop):
             "crop_height": crop_height,
             "crop_width": crop_width
         }
+
+
 @TRANSFORMS.register_module()
 class MultiplicativeNoise(BaseTransform):
 
@@ -382,7 +392,7 @@ class MultiplicativeNoise(BaseTransform):
 
     @property
     def targets(self):
-        return {"image": self.apply, "images": self.apply_to_images} # image only transform
+        return {"image": self.apply, "images": self.apply_to_images}  # image only transform
 
     def apply(self, image, multiplier=np.array([1]), **params):
         return multiply(image, multiplier)
@@ -405,9 +415,10 @@ class MultiplicativeNoise(BaseTransform):
 
         return {"multiplier": multiplier}
 
+
 @TRANSFORMS.register_module()
 class GaussNoise(BaseTransform):
-    def __init__(self,var_limit=(10.0, 50.0), mean=0, **kwargs):
+    def __init__(self, var_limit=(10.0, 50.0), mean=0, **kwargs):
         super(GaussNoise, self).__init__(**kwargs)
         if isinstance(var_limit, (tuple, list)):
             if var_limit[0] < 0:
@@ -429,7 +440,7 @@ class GaussNoise(BaseTransform):
 
     @property
     def targets(self):
-        return {"image": self.apply, "images": self.apply_to_images} # image only transform
+        return {"image": self.apply, "images": self.apply_to_images}  # image only transform
 
     def apply(self, img, gauss=None, **kwargs):
         return gauss_noise(img, gauss=gauss)
@@ -443,6 +454,8 @@ class GaussNoise(BaseTransform):
 
         gauss = random_state.normal(self.mean, sigma, image.shape)
         return {"gauss": gauss}
+
+
 @TRANSFORMS.register_module()
 class RandomCutout(BaseTransform):
     """Args:
@@ -466,7 +479,8 @@ class RandomCutout(BaseTransform):
     def __init__(self, n_holes=1, cutout_shape=None, cutout_ratio=(0.1, 0.1), fill_in=0, **kwargs):
         super(RandomCutout, self).__init__(**kwargs)
 
-        assert (cutout_shape is None) ^ (cutout_ratio is None), 'Either cutout_shape or cutout_ratio should be specified.'
+        assert (cutout_shape is None) ^ (
+                    cutout_ratio is None), 'Either cutout_shape or cutout_ratio should be specified.'
         assert (isinstance(cutout_shape, (list, tuple)) or isinstance(cutout_ratio, (list, tuple)))
         if isinstance(n_holes, tuple):
             assert len(n_holes) == 2 and 0 <= n_holes[0] < n_holes[1]
@@ -486,7 +500,8 @@ class RandomCutout(BaseTransform):
         return random_cutout(img, **kwargs)
 
     def get_params(self, **kwargs):
-        height, width = kwargs["image"].shape[:2] if kwargs.get("image", None) is not None else kwargs.get("images")[0].shape[:2]
+        height, width = kwargs["image"].shape[:2] if kwargs.get("image", None) is not None else kwargs.get("images")[
+                                                                                                    0].shape[:2]
         # cutout = True if np.random.rand() < self.prob else False
         n_holes = np.random.randint(self.n_holes[0], self.n_holes[1] + 1)
         for _ in range(n_holes):
@@ -503,6 +518,8 @@ class RandomCutout(BaseTransform):
             y2 = np.clip(y1 + cutout_h, 0, height)
 
             return {"x1": x1, "x2": x2, "y1": y1, "y2": y2, "fill_in": self.fill_in}
+
+
 @TRANSFORMS.register_module()
 class Normalize(BaseTransform):
     def __init__(self,
@@ -513,7 +530,7 @@ class Normalize(BaseTransform):
                  scale=255.0,
                  **kwargs):
         super(Normalize, self).__init__(**kwargs)
-        self.mean = np.array(mean,dtype=np.float32)
+        self.mean = np.array(mean, dtype=np.float32)
         self.std = np.array(std, dtype=np.float32)
         self.means = means
         self.stds = stds
@@ -535,6 +552,7 @@ class Normalize(BaseTransform):
              f"len(self.means) = {len(self.means)} len(self.stds) = {len(self.stds)}")
         return [self.apply(image, np.array(mean), np.array(std)) for image, mean, std in
                 zip(images, self.means, self.stds)]
+
 
 @TRANSFORMS.register_module()
 class ToTensor(BaseTransform):

@@ -1,3 +1,4 @@
+import os
 import time
 import traceback
 from os.path import join as opj
@@ -15,7 +16,8 @@ from seg.utils import get_gpu_memroy, save_json, save_checkpoint, load_checkpoin
 import datetime
 from seg.metrics.common import calculate_metric_for_more, calculate_metric_for_one, parse_seg_metrics, \
     parse_seg_metrics_to_table
-from seg.export.converters import TRTModel, save, load, torch2onnx, onnx2trt
+from seg.export.converters import TRTModel, torch2onnx
+from seg.statistics.statistics import ClsStatistics
 
 
 class TrainRunner(InferenceRunner):
@@ -24,29 +26,43 @@ class TrainRunner(InferenceRunner):
         self.export_cfg, self.train_cfg, self.inference_cfg, self.base_cfg = \
             export_cfg.copy(), train_cfg.copy(), inference_cfg.copy(), base_cfg.copy()
 
-        cfg = {'common': self.base_cfg, 'inference': self.inference_cfg, 'data': self.train_cfg, 'export': self.export_cfg}
+        imageNetMeanStd = train_cfg.get('ImageNetMeanStd', True)
+        if not imageNetMeanStd:
+            root = opj(self.train_cfg['train']['dataset']['root'], 'train')
+            statistics = ClsStatistics(root, self.logger)
+            mean, std = statistics.mean, statistics.std
+            mean_std = dict(mean=mean, std=std)
+
+            self.inference_cfg['transform'][-2].update(mean_std)
+            self.train_cfg['train']['transform'][-2].update(mean_std)
+            self.train_cfg['valid']['transform'][-2].update(mean_std)
+
+        cfg = {'common': self.base_cfg, 'inference': self.inference_cfg, 'data': self.train_cfg,
+               'export': self.export_cfg}
         jp = opj(self.workdir, self.timestamp + '.json')
         save_json(cfg, jp)
 
-        self.train_dataloader = self._build_dataloader(train_cfg['train'])
+        self.train_dataloader = self._build_dataloader(self.train_cfg['train'])
 
-        self.valid_dataloader = self._build_dataloader(train_cfg['valid'])
+        self.valid_dataloader = self._build_dataloader(self.train_cfg['valid'])
         self.shape_labels = self.valid_dataloader.dataset.shape_labels
         self.class2label = self.valid_dataloader.dataset.class2label
         self.label2class = self.valid_dataloader.dataset.label2class
 
-        self.optimizer = self._build_optimizer(train_cfg['optimizer'])
-        self.lr_scheduler = self._build_lr_scheduler(train_cfg['lr_scheduler'])
-        self.max_epochs = train_cfg['max_epochs']
+        self.optimizer = self._build_optimizer(self.train_cfg['optimizer'])
+        self.lr_scheduler = self._build_lr_scheduler(self.train_cfg['lr_scheduler'])
+        self.max_epochs = self.train_cfg['max_epochs']
         self.iters = len(self.train_dataloader)
-        self.log_interval = train_cfg.get('log_interval', self.iters // 10)
-        self.train_valid_interval = train_cfg.get('train_valid_interval', 1)
+        self.log_interval = self.train_cfg.get('log_interval', self.iters // 10)
+        self.train_valid_interval = self.train_cfg.get('train_valid_interval', 1)
 
         self.best_value = 0
         self.best_pth_path = opj(self.workdir, self.timestamp + '.pth')
         self.select_metric = train_cfg.get('select_metric', 'f1').lower()
         assert self.select_metric in ['f1', 'iou', 'b_f1_iou', 'b_p_r_iou'], \
             f"select_metric must be one of 'f1', 'iou', 'b_f1_iou', 'b_p_r_iou', but got {self.select_metric}"
+
+        self.save_infer_image = self.train_cfg.get('save_infer_image', False)
 
     def _build_dataloader(self, cfg):
         transform = self._build_transform(cfg['transform'])
@@ -218,21 +234,23 @@ class TrainRunner(InferenceRunner):
         except Exception as e:
             self.logger.error(f"Convert trt failed! {e} \n{traceback.format_exc()}")
 
-
     def _export(self):
         # 1. torch to onnx
-        self.logger.info(f"Load model from {self.best_pth_path}")
-        height, width = (self.train_cfg['valid']['transform'][0]['height'],
-                         self.train_cfg['valid']['transform'][0]['width'])
-        ckpt = load_checkpoint(self.model, self.best_pth_path)
-        # threshold = ckpt['meta']['threshold']
-        onnx_path = self.best_pth_path.replace('.pth', '.onnx')
-        onnx_cfg = dict(
-            model=self.model,
-            dummy_input=torch.ones(1, 3, height, width).cuda(),
-            onnx_model_name=onnx_path,
-            opset_version=self.export_cfg['onnx']['opset_version']
-        )
+        try:
+            self.logger.info(f"Load model from {self.best_pth_path}")
+            height, width = (self.train_cfg['valid']['transform'][0]['height'],
+                             self.train_cfg['valid']['transform'][0]['width'])
+            ckpt = load_checkpoint(self.model, self.best_pth_path)
+            # threshold = ckpt['meta']['threshold']
+            onnx_path = self.best_pth_path.replace('.pth', '.onnx')
+            onnx_cfg = dict(
+                model=self.model,
+                dummy_input=torch.ones(1, 3, height, width).cuda(),
+                onnx_model_name=onnx_path,
+                opset_version=self.export_cfg['onnx']['opset_version']
+            )
+        except Exception as e:
+            self.logger.error(f"Export info error! {e} \n{traceback.format_exc()}")
         try:
             self.logger.info(f"Convert onnx.")
             torch2onnx(**onnx_cfg)
@@ -270,19 +288,11 @@ class TrainRunner(InferenceRunner):
             self.export_cfg['shape_labels'] = self.train_cfg['valid']['dataset']['shape_labels']
             trt_cfg_path = onnx_path.replace('.onnx', '_trt.json')
             save_json(self.export_cfg, trt_cfg_path)
-            self.logger.info(f"Saved trt json to {trt_cfg_path}")
+            self.logger.info(f"Save TRT json to {trt_cfg_path}")
         except Exception as e:
             self.logger.error(f"Save TRT json failed. {e}\n{traceback.format_exc()}")
 
-
-
     def __call__(self, *args, **kwargs):
-
-        # self._valid()
-        # self._torch2onnx()
-        # self._onnx2trt()
-        # self._valid(is_valid=False)
-
         start_time = time.time()
         for _ in range(self.epoch, self.max_epochs):
             if hasattr(self.train_dataloader.sampler, 'set_epoch'):

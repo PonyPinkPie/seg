@@ -123,6 +123,7 @@
     }
   },
   "data": {
+    "ImageNetMeanStd": false,
     "train": {
       "transform": [
           {"type": "Resize", "width": 512, "height": 512, "always_apply": true},
@@ -198,7 +199,8 @@
       "T_0": 40,
       "eta_min": 1e-8
     },
-    "select_metric": "iou"
+    "select_metric": "iou",
+    "save_infer_image": false
   },
   "export": {
     "onnx": {"opset_version": 17},

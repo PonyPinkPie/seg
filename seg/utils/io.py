@@ -7,6 +7,7 @@ import os
 from .typing import Sequence
 import numpy as np
 import cv2
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
 IMAGE_POSTFIX: [Sequence[str]] = ["PNG", "JPEG", "JPG", "BMP", "PPM", "TIF", "PGM", "TIFF", "BMP"]
 
@@ -91,3 +92,40 @@ def read_image(ip:str, mode:str="BGR"):
         image = image[..., ::-1]
 
     return image
+
+
+def map_execute(map_func, args, max_workers=15):
+    """
+    多进程任务处理功能：
+    map_func: 要处理的函数
+    map_args_list, 要处理的函数输入的参数
+    num_mp: 多进程的数量
+    use_log: 输出信息的log函数
+    msg: 输出信息的内容的格式化字符，里面必须要有 {}/{},来记录进度
+    """
+    if max_workers == 0:
+        result = [map_func(*arg) for arg in zip(*args)]
+    else:
+        with ProcessPoolExecutor(max_workers=max_workers) as pool:
+            func_iter = pool.map(map_func, *args)
+            result = [r for r in func_iter]
+    return result
+
+def async_execute(map_func, args, max_workers=15):
+    """
+    多线程分批处理数据：
+    map_func: 要处理的函数
+    map_args_list, 要处理的函数输入的参数
+    num_mp: 开多少个线程进行处理
+    log_info: 打印日志新的函数
+    msg: 打印日志的信息说明
+    """
+
+    t = ThreadPoolExecutor(max_workers=max_workers)
+    result = []
+    func_iter = t.map(map_func, *args)
+
+    for i, r in enumerate(func_iter):
+        result.append(r)
+    t.shutdown(wait=True)
+    return result

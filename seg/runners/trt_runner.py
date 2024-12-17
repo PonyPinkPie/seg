@@ -8,7 +8,7 @@ from seg.transforms.compose import Compose
 class TRTRunner:
     def __init__(self, cfg):
         self.transform = Compose(cfg['transform'])
-        self.shape_labels = cfg['shape_labels']
+        self.shape_labels = sorted(cfg['shape_labels'])
         self._class_label_dict = self.get_class_label_dict()
         self._class_label_dict.update(dict(background=0))
         self.model = TRTModel(**cfg['trt'])
@@ -60,12 +60,12 @@ class TRTRunner:
                 for idx, contour in enumerate(contours):
                     prob_mask = np.zeros_like(prob, dtype=np.uint8)
                     prob_mask = cv2.fillPoly(prob_mask, [contour[:, 0, :]], 1)
-                    prob_map = prob_mask * prob
-                    int_contour = [[int(x), int(y)] for x, y in contour[:, 0, :]]
-                    area = int(cv2.contourArea(contour))
+                    area = int(np.sum(prob_mask))
                     if area < 4:
                         continue
+                    prob_map = prob_mask * prob
                     score = np.sum(prob_map) / area
+                    int_contour = np.squeeze(contour).tolist()
                     result_dict[cls][idx] = {
                         "contour": int_contour,
                         "area": area,
