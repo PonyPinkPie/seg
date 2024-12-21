@@ -30,7 +30,7 @@ def calc_means_stds_without_zeros(image_path):
 class ClsStatistics:
     def __init__(self, root, logger):
         self.image_path = [opj(root, i) for i in os.listdir(root) if i.split('.')[-1].upper() in IMAGE_POSTFIX]
-        logger.info(f'Calculate mean and stds for {len(self.image_path)}')
+        logger.info(f'Calculate mean and stds for train dataset {len(self.image_path)} images')
         pfunc = partial(calc_means_stds_without_zeros)
         mean_std = map_execute(pfunc, (self.image_path,))
         mean_std = np.array(mean_std, dtype=np.float64)

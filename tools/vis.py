@@ -3,7 +3,7 @@ import os
 
 import numpy as np
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../'))
@@ -55,7 +55,7 @@ def vis_image(info):
     cv2.imwrite(rp, np.hstack([image, np.ones((h, 10, c)) * 255, image_copy]))
 
     pass
-
+# file:///home/deepsight/Downloads/Wirevis/valid/01aea8d8-e8a2-49ba-9b0d-670be26c0efb-vis.jpg
 
 def main():
     args = parse_args()

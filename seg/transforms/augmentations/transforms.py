@@ -78,13 +78,13 @@ class Resize(BaseTransform):
 
     def get_params(self, **kwargs):
         padding = random.random() < self.padding
-        if 'image' in kwargs.keys():
+        if kwargs.get('image', None) is not None:
             return {
                 'cols': kwargs['image'].shape[1],
                 'rows': kwargs['image'].shape[0],
                 'padding': padding,
             }
-        elif 'images' in kwargs.keys():
+        elif kwargs.get('images', None) is not None:
             return {
                 'cols': kwargs['images'][0].shape[1],
                 'rows': kwargs['images'][0].shape[0],
@@ -99,19 +99,19 @@ class HorizontalFlip(BaseTransform):
     def __init__(self, always_apply=False, p=0.5):
         super(HorizontalFlip, self).__init__(always_apply, p)
 
-    def apply(self, image):
+    def apply(self, image, **kwargs):
         return hflip(image)
 
-    def apply_to_mask(self, mask):
+    def apply_to_mask(self, mask, **kwargs):
         return hflip(mask)
 
     def get_params(self, **kwargs):
-        if kwargs.get('image', None):
+        if kwargs.get('image', None) is not None:
             return {
                 'cols': kwargs['image'].shape[1],
                 'rows': kwargs['image'].shape[0],
             }
-        elif kwargs.get('images', None):
+        elif kwargs.get('images', None) is not None:
             return {
                 'cols': kwargs['image'][0].shape[1],
                 'rows': kwargs['image'][0].shape[0],
@@ -125,19 +125,19 @@ class VerticalFlip(BaseTransform):
     def __init__(self, always_apply=False, p=0.5):
         super(VerticalFlip, self).__init__(always_apply, p)
 
-    def apply(self, image):
+    def apply(self, image, **kwargs):
         return vflip(image)
 
-    def apply_to_mask(self, mask):
+    def apply_to_mask(self, mask, **kwargs):
         return vflip(mask)
 
     def get_params(self, **kwargs):
-        if kwargs.get('image', None):
+        if kwargs.get('image', None) is not None:
             return {
                 'cols': kwargs['image'].shape[1],
                 'rows': kwargs['image'].shape[0],
             }
-        elif kwargs.get('images', None):
+        elif kwargs.get('images', None) is not None:
             return {
                 'cols': kwargs['image'][0].shape[1],
                 'rows': kwargs['image'][0].shape[0],
@@ -151,19 +151,19 @@ class CenterFlip(BaseTransform):
     def __init__(self, always_apply=False, p=0.5):
         super(CenterFlip, self).__init__(always_apply, p)
 
-    def apply(self, image):
+    def apply(self, image, **kwargs):
         return cflip(image)
 
-    def apply_to_mask(self, mask):
+    def apply_to_mask(self, mask, **kwargs):
         return cflip(mask)
 
     def get_params(self, **kwargs):
-        if kwargs.get('image', None):
+        if kwargs.get('image', None) is not None:
             return {
                 'cols': kwargs['image'].shape[1],
                 'rows': kwargs['image'].shape[0],
             }
-        elif kwargs.get('images', None):
+        elif kwargs.get('images', None) is not None:
             return {
                 'cols': kwargs['image'][0].shape[1],
                 'rows': kwargs['image'][0].shape[0],
@@ -200,13 +200,13 @@ class Rotate(BaseTransform):
         return rotate(mask, angle, cv2.INTER_NEAREST, self.border_mode, self.mask_value)
 
     def get_params(self, **kwargs):
-        if kwargs.get('image', None):
+        if kwargs.get('image', None) is not None:
             return {
                 'cols': kwargs['image'].shape[1],
                 'rows': kwargs['image'].shape[0],
                 'angle': random.uniform(*self.limit)
             }
-        elif kwargs.get('images', None):
+        elif kwargs.get('images', None) is not None:
             return {
                 'cols': kwargs['image'][0].shape[1],
                 'rows': kwargs['image'][0].shape[0],
@@ -283,7 +283,7 @@ class RandomCrop(BaseTransform):
                  crop_object=False,
                  crop_object_ratio=1.0,
                  **kwargs):
-        super(RandomCrop).__init__(**kwargs)
+        super(RandomCrop, self).__init__(**kwargs)
         self.height_ratio = height_ratio
         self.width_ratio = width_ratio
         self.padding = padding
@@ -356,9 +356,9 @@ class RandomCrop(BaseTransform):
 
 @TRANSFORMS.register_module()
 class CenterCrop(RandomCrop):
-    def get_params(self, **params):
-        height, width = params["image"].shape[:2] if params.get("image", None) is not None \
-            else params.get("images")[0].shape[:2]
+    def get_params(self, **kwargs):
+        height, width = kwargs["image"].shape[:2] if kwargs.get("image", None) is not None \
+            else kwargs.get("images")[0].shape[:2]
         if self.crop_height == 0:
             crop_height = int(height * self.height_ratio)
         else:
@@ -394,7 +394,7 @@ class MultiplicativeNoise(BaseTransform):
     def targets(self):
         return {"image": self.apply, "images": self.apply_to_images}  # image only transform
 
-    def apply(self, image, multiplier=np.array([1]), **params):
+    def apply(self, image, multiplier=np.array([1]), **kwargs):
         return multiply(image, multiplier)
 
     def get_params(self, **kwargs):

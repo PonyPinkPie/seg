@@ -120,3 +120,4 @@ workdir/
 # Pytorch
 *.pth
 local/
+independent_infer/

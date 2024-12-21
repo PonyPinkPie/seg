@@ -62,7 +62,6 @@ class TrainRunner(InferenceRunner):
         assert self.select_metric in ['f1', 'iou', 'b_f1_iou', 'b_p_r_iou'], \
             f"select_metric must be one of 'f1', 'iou', 'b_f1_iou', 'b_p_r_iou', but got {self.select_metric}"
 
-        self.save_infer_image = self.train_cfg.get('save_infer_image', False)
 
     def _build_dataloader(self, cfg):
         transform = self._build_transform(cfg['transform'])

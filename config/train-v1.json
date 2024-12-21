@@ -199,8 +199,7 @@
       "T_0": 40,
       "eta_min": 1e-8
     },
-    "select_metric": "iou",
-    "save_infer_image": false
+    "select_metric": "iou"
   },
   "export": {
     "onnx": {"opset_version": 17},
