@@ -28,11 +28,15 @@ def main():
     vis_path = image_path.replace('.jpg', '-vis.jpg')
     jp = image_path.replace('.jpg', '.json')
     cfg = file_to_config(cfg_path)
+
     trt_runner = TRTRunner(cfg)
+
     image = cv2.imread(image_path)
     h, w, c = image.shape
     images = [image]
+
     result = trt_runner(images)
+
     image_copy = image.copy()
     save_json(result, jp)
     info_dict = result[0]

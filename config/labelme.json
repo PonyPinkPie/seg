@@ -17,16 +17,10 @@
     },
     "cudnn_deterministic": true,
     "cudnn_benchmark": false,
-    "seed": 0,
-    "metrics": {}
+    "seed": 0
   },
-  "inference": {
+  "data": {
     "multi_label": false,
-    "transform": [
-      {"type": "Resize", "always_apply": true, "width": 512, "height": 512, "padding": 0},
-      {"type": "Normalize", "always_apply": true, "scale": 1.0},
-      {"type": "ToTensor", "always_apply": true}
-    ],
     "model": {
       "type": "EncoderDecoder",
       "pretrained": "/root/.cache/torch/hub/checkpoints/moganet_tiny_sz256_8xbs128_ep300.pth",
@@ -120,9 +114,7 @@
           ]
         }
       ]
-    }
-  },
-  "data": {
+    },
     "ImageNetMeanStd": true,
     "train": {
       "transform": [
@@ -146,14 +138,13 @@
         "shape_labels": [
           "A",
           "B",
-          "C",
-          "D"
+          "C"
         ]
       },
       "dataloader": {
         "type": "DataLoader",
-        "samples_per_gpu": 1,
-        "workers_per_gpu": 1,
+        "samples_per_gpu": 16,
+        "workers_per_gpu": 4,
         "shuffle": true,
         "drop_last": true,
         "pin_memory": true
@@ -172,14 +163,13 @@
         "shape_labels": [
           "A",
           "B",
-          "C",
-          "D"
+          "C"
         ]
       },
       "dataloader": {
         "type": "DataLoader",
-        "samples_per_gpu": 1,
-        "workers_per_gpu": 1,
+        "samples_per_gpu": 16,
+        "workers_per_gpu": 4,
         "shuffle": false,
         "drop_last": false,
         "pin_memory": true

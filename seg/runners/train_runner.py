@@ -4,8 +4,9 @@ import traceback
 from os.path import join as opj
 import torch
 
-from .inference_runner import InferenceRunner
-
+from .base_runner import BaseRunner
+from seg.models.registry import build_segmentation
+from seg.transforms.compose import Compose
 from seg.dataloaders import build_dataloader
 from seg.datasets import build_dataset
 from seg.optimizers import build_optimizer
@@ -20,27 +21,21 @@ from seg.export.converters import TRTModel, torch2onnx
 from seg.statistics.statistics import ClsStatistics
 
 
-class TrainRunner(InferenceRunner):
-    def __init__(self, export_cfg, train_cfg, inference_cfg, base_cfg=None):
-        super().__init__(inference_cfg, base_cfg)
-        self.export_cfg, self.train_cfg, self.inference_cfg, self.base_cfg = \
-            export_cfg.copy(), train_cfg.copy(), inference_cfg.copy(), base_cfg.copy()
+class TrainRunner(BaseRunner):
+    def __init__(self, export_cfg, train_cfg, base_cfg=None):
+        super().__init__(base_cfg)
+        self.export_cfg, self.train_cfg, self.base_cfg = export_cfg.copy(), train_cfg.copy(), base_cfg.copy()
 
-        imageNetMeanStd = train_cfg.get('ImageNetMeanStd', True)
-        if not imageNetMeanStd:
+        if train_cfg.get('ImageNetMeanStd', True):
+            self.logger.info(f"Using ImageNet mean and std")
+        else:
             root = opj(self.train_cfg['train']['dataset']['root'], 'train')
             statistics = ClsStatistics(root, self.logger)
             mean, std = statistics.mean, statistics.std
             mean_std = dict(mean=mean, std=std)
 
-            self.inference_cfg['transform'][-2].update(mean_std)
             self.train_cfg['train']['transform'][-2].update(mean_std)
             self.train_cfg['valid']['transform'][-2].update(mean_std)
-
-        cfg = {'common': self.base_cfg, 'inference': self.inference_cfg, 'data': self.train_cfg,
-               'export': self.export_cfg}
-        jp = opj(self.workdir, self.timestamp + '.json')
-        save_json(cfg, jp)
 
         self.train_dataloader = self._build_dataloader(self.train_cfg['train'])
 
@@ -48,6 +43,9 @@ class TrainRunner(InferenceRunner):
         self.shape_labels = self.valid_dataloader.dataset.shape_labels
         self.class2label = self.valid_dataloader.dataset.class2label
         self.label2class = self.valid_dataloader.dataset.label2class
+
+        self.train_cfg['model']['decoder_head']['num_classes'] = len(self.class2label)
+        self.model = self._build_model(self.train_cfg['model'])
 
         self.optimizer = self._build_optimizer(self.train_cfg['optimizer'])
         self.lr_scheduler = self._build_lr_scheduler(self.train_cfg['lr_scheduler'])
@@ -60,8 +58,21 @@ class TrainRunner(InferenceRunner):
         self.best_pth_path = opj(self.workdir, self.timestamp + '.pth')
         self.select_metric = train_cfg.get('select_metric', 'f1').lower()
         assert self.select_metric in ['f1', 'iou', 'b_f1_iou', 'b_p_r_iou'], \
-            f"select_metric must be one of 'f1', 'iou', 'b_f1_iou', 'b_p_r_iou', but got {self.select_metric}"
+            f"select_metric(default is f1) must be one of 'f1', 'iou', 'b_f1_iou', 'b_p_r_iou', but got {self.select_metric}"
 
+        cfg = {'common': self.base_cfg, 'data': self.train_cfg, 'export': self.export_cfg}
+        jp = opj(self.workdir, self.timestamp + '.json')
+        save_json(cfg, jp)
+
+    def _build_model(self, cfg):
+        self.logger.info(f"Building model.")
+        model = build_segmentation(cfg)
+        model.cuda()
+        self.logger.info(f"Building model Done.")
+        return model
+
+    def _build_transform(self, cfg):
+        return Compose(cfg)
 
     def _build_dataloader(self, cfg):
         transform = self._build_transform(cfg['transform'])
@@ -74,7 +85,6 @@ class TrainRunner(InferenceRunner):
 
     def _build_optimizer(self, cfg):
         return build_optimizer(cfg, dict(params=self.model.parameters()))
-        # return build_optimizer(cfg, dict(params=[{'params':self.model.parameters(), 'lr':0.01}]))
 
     def _build_lr_scheduler(self, cfg):
         return build_lr_scheduler(cfg, dict(optimizer=self.optimizer))
@@ -107,8 +117,8 @@ class TrainRunner(InferenceRunner):
         time_info = f"{(self.used_time * self.log_interval):.2f} sec".ljust(10)
         loss_info = f"{self.losses['loss']:.4f}".ljust(10)
         lr_info = f"{self.lr[0]:.6f}".ljust(10)
-        gpu_info = f"{(float(get_gpu_memroy([self.image.device.index])[0]['memory_used']) / 1024):.2f} GB".ljust(8)
-        self.logger.info(f"Step:{iter_info} Time:{time_info} Loss:{loss_info} Lr:{lr_info} GPU:{gpu_info}")
+        gpu_info = get_gpu_memroy().ljust(8)
+        self.logger.info(f"Step:{iter_info} Time:{time_info} Loss:{loss_info} Lr:{lr_info} {gpu_info}")
 
     def _train(self):
         self.iter = 0
@@ -221,7 +231,6 @@ class TrainRunner(InferenceRunner):
 
     def _onnx2trt(self):
         onnx_path = self.best_pth_path.replace('.pth', '.onnx')
-        # best_pth_path = '/workspace/mycode/03-seg/seg/workdir/test/20241213_111019/20241213_111019.pth'
         trt_cfg = dict(
             max_batch_size=32,
             mode='fp16'

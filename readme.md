@@ -1,4 +1,4 @@
-1. environment
+# 1. environment
 ```shell
 conda create -n seg python==3.8.5 -y
 conda activate seg
@@ -10,13 +10,18 @@ pip install -r requirements.txt -i https://pypi.doubanio.com/simple
 
 ```
 
-# TODO
-```shell
-1、损失函数（看看sigmoid）
-2、优化器（学习率放大）
-3、模型（推理结果）
-4、数据增强（变换是否正确）resize ok, 其他未确认
-6、评价指标未开始
-7、模型导出
 
+# 2. prepare data
+open `config/labelme.json`, 
+- common
+  - replace `workdir` with `your own workdir`
+- data
+  - model
+    - replace `pretrained` with `your own pretrained path`
+  - train and valid
+    - replace `root` with `your own data root`
+    - replace `shape_labels` with `your own shape_labels`
+- 
+```shell
+python tools/train.py --cfg ./config/labelme.json
 ```

@@ -24,6 +24,7 @@ class LabelMe(Dataset):
         self.image_labels = sorted(image_labels)
         self.shape_labels = sorted(shape_labels)
         self.logger = logger
+        assert self.logger is not None, f"logger is {self.logger}"
         self._class_label_dict = self.get_class_label_dict()
         self._class_label_dict.update(dict(background=0))
         self._label_class_dict = self.get_label_class_dict()
@@ -31,6 +32,8 @@ class LabelMe(Dataset):
         self.data_info = []
         self.load_data_paths()
         self.length = len(self.data_info)
+
+        assert len(self.label_set)+1 == len(self._class_label_dict), f"data label set are {sorted(list(self.label_set))}, but shape_labels in config are {self.shape_labels}."
 
     def __len__(self):
         return self.length
@@ -47,7 +50,7 @@ class LabelMe(Dataset):
             for label in label_set:
                 self.label_set.add(label)
                 if label not in self.shape_labels and label != 'background':
-                    raise f"self.shape_labels are {self.shape_labels}, but got unknown label: {label} in {jp}, please check json info or configs"
+                    raise f"self.shape_labels are {self.shape_labels}, but got unknown label: {label} in {jp}, please check label info or config info."
             data_info = {
                 'ip': ip,
                 'json_info': json_info
